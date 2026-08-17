@@ -168,6 +168,8 @@ extern unsigned int m_voice_oscillo_pal3[8];
 #import "CloudStorageManager.h"
 #import "MacPlayerLayout.h"
 
+static void MDZSyncMacStatusItem(DetailViewControllerIphone *player);
+
 @interface DetailViewControllerIphone (MDZMacLayout)
 - (void)mdzApplyDesktopLayoutMetrics;
 - (void)mdzLayoutMacActionRow;
@@ -2165,6 +2167,7 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
     } else {
         [self play_curEntry:-1];
     }
+    MDZSyncMacStatusItem(self);
     return;
 }
 - (IBAction)pausePushed {
@@ -2182,6 +2185,7 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
         [self updateBarPos];
         [mplayer Pause:YES];
     }
+    MDZSyncMacStatusItem(self);
     return;
 }
 
@@ -2408,8 +2412,40 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
     }
     
     no_reetrant=false;
+    MDZSyncMacStatusItem(self);
 }
 
+static void MDZSyncMacStatusItem(DetailViewControllerIphone *player) {
+#if TARGET_OS_MACCATALYST
+    Class mgr = NSClassFromString(@"ModizerMacWindowManager");
+    if (![mgr respondsToSelector:@selector(updateNowPlaying:)]) {
+        return;
+    }
+    NSString *title = @"";
+    int elapsed = 0;
+    int duration = 0;
+    BOOL playing = player.mIsPlaying && !player.mPaused;
+    BOOL paused = player.mIsPlaying && player.mPaused;
+    if (player.mPlaylist_size && player.mplayer) {
+        if ([player.mplayer getModFileTitleOrNull]) {
+            title = [NSString stringWithFormat:@"%@ / %@", [player.mplayer getModFileTitle], [player.mplayer getModName]];
+        } else if ([player.mplayer getModName]) {
+            title = [player.mplayer getModName];
+        }
+        elapsed = [player.mplayer getCurrentTime];
+        duration = [player.mplayer getSongLength];
+    }
+    [mgr performSelector:@selector(updateNowPlaying:) withObject:@{
+        @"title": title ?: @"",
+        @"elapsedMS": @(elapsed),
+        @"durationMS": @(duration),
+        @"playing": @(playing),
+        @"paused": @(paused),
+    }];
+#else
+    (void)player;
+#endif
+}
 
 -(IBAction) changeTimeDisplay {
     display_length_mode^=1;

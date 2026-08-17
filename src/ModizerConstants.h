@@ -101,6 +101,12 @@ extern void *LoadingProgressObserverContext;
 #define MDZ_MAC_TRAFFIC_LIGHTS_INSET 78.0
 
 #ifdef __OBJC__
+#define MDZMacStatusItemCommandNotification @"MDZMacStatusItemCommandNotification"
+#define MDZMacStatusItemCommandKey @"command"
+#define MDZMacStatusItemCommandPlayPause @"playPause"
+#define MDZMacStatusItemCommandPrev @"prev"
+#define MDZMacStatusItemCommandNext @"next"
+
 static inline BOOL MDZIsMacDesktop(void) {
 #if TARGET_OS_MACCATALYST
     return YES;

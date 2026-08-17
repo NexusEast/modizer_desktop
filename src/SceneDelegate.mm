@@ -68,6 +68,9 @@ bool mdz_macos_AOTplugin=false;
         if (macWindowManager && [macWindowManager respondsToSelector:NSSelectorFromString(@"applyDesktopWindowGeometry")]) {
             [macWindowManager performSelector:NSSelectorFromString(@"applyDesktopWindowGeometry")];
         }
+        if (macWindowManager && [macWindowManager respondsToSelector:NSSelectorFromString(@"installNowPlayingStatusItem")]) {
+            [macWindowManager performSelector:NSSelectorFromString(@"installNowPlayingStatusItem")];
+        }
     });
 #endif
     
@@ -148,6 +151,14 @@ bool mdz_macos_AOTplugin=false;
                 if (macWindowManager) {
 //                    NSLog(@"✅ ModizerMacWindowManager class found!");
                     mdz_macos_AOTplugin=true;
+                    if ([macWindowManager respondsToSelector:NSSelectorFromString(@"installNowPlayingStatusItem")]) {
+                        [macWindowManager performSelector:NSSelectorFromString(@"installNowPlayingStatusItem")];
+                    }
+                    [[NSNotificationCenter defaultCenter] removeObserver:self name:MDZMacStatusItemCommandNotification object:nil];
+                    [[NSNotificationCenter defaultCenter] addObserver:self
+                                                             selector:@selector(mdzHandleMacStatusItemCommand:)
+                                                                 name:MDZMacStatusItemCommandNotification
+                                                               object:nil];
                     // Rebuild menu
                     [[UIMenuSystem mainSystem] setNeedsRebuild];
                 } else {
@@ -212,6 +223,27 @@ bool mdz_macos_AOTplugin=false;
 #endif
 #endif
 
+#if TARGET_OS_MACCATALYST
+- (void)mdzHandleMacStatusItemCommand:(NSNotification *)note {
+    NSString *cmd = note.userInfo[MDZMacStatusItemCommandKey];
+    DetailViewControllerIphone *player = self.detailViewControlleriPhone;
+    if (!player || ![cmd isKindOfClass:[NSString class]]) {
+        return;
+    }
+    if ([cmd isEqualToString:MDZMacStatusItemCommandPlayPause]) {
+        if (player.mIsPlaying && player.mPaused == 0) {
+            [player pausePushed];
+        } else {
+            [player playPushed];
+        }
+    } else if ([cmd isEqualToString:MDZMacStatusItemCommandPrev]) {
+        [player playPrev];
+    } else if ([cmd isEqualToString:MDZMacStatusItemCommandNext]) {
+        [player playNext];
+    }
+}
+#endif
+
 - (void)sceneDidDisconnect:(UIScene *)scene {
     // Called as the scene is being released by the system.
     //MDZILog("sceneDidDisconnect");
@@ -220,6 +252,9 @@ bool mdz_macos_AOTplugin=false;
     [center removeAllDeliveredNotifications];
     // Remove all pending notifications
     [center removeAllPendingNotificationRequests];
+#if TARGET_OS_MACCATALYST
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:MDZMacStatusItemCommandNotification object:nil];
+#endif
     
     
     [detailViewControlleriPhone enterBackground];
