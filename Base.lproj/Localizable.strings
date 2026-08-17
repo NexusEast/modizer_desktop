@@ -626,6 +626,12 @@
 "Suspend" = "Suspend";
 "Clear all" = "Clear all";
 "Online" = "Online";
+"Local" = "Local";
+"Add Folder" = "Add Folder";
+"Remove" = "Remove";
+"Select Folder" = "Select Folder";
+"Choose a folder to browse in Modizer. Files are not copied." = "Choose a folder to browse in Modizer. Files are not copied.";
+"Cannot access this folder. You can remove it from the list." = "Cannot access this folder. You can remove it from the list.";
 
 
 // ================================

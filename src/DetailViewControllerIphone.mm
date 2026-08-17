@@ -177,9 +177,39 @@ extern unsigned int m_voice_oscillo_pal3[8];
 - (void)mdzSyncMacCommandChrome;
 - (void)mdzBindMacTransportActions;
 - (void)mdzRefreshMacBottomPanels;
+- (void)mdzReloadMacSubsongTable;
+- (void)mdzHighlightMacCurrentSubsong;
+- (void)mdzHighlightMacSubsongRow:(int)row scrollIfNeeded:(BOOL)scrollIfNeeded;
 - (NSString *)mdzMacNowPlayingMeta;
 - (myTabBarController *)mdzTabBarController;
 @end
+
+static void MDZStyleMacLoopInfButton(UIButton *btn, BOOL on);
+static void MDZStyleMacEqToggle(UIButton *btn, BOOL on);
+static const NSInteger kMDZMacSubsongLabelTag = 1001;
+
+static void MDZStyleMacSubsongCell(UITableViewCell *cell, BOOL current) {
+    if (!cell) {
+        return;
+    }
+    UILabel *topLabel = (UILabel *)[cell viewWithTag:kMDZMacSubsongLabelTag];
+    if (topLabel) {
+        topLabel.font = [UIFont systemFontOfSize:13 weight:current ? UIFontWeightSemibold : UIFontWeightMedium];
+        topLabel.textColor = current ? [UIColor whiteColor] : [UIColor colorWithWhite:0.82 alpha:1.0];
+        topLabel.highlightedTextColor = [UIColor whiteColor];
+    }
+    UIBackgroundConfiguration *config = [UIBackgroundConfiguration clearConfiguration];
+    if (current) {
+        config.backgroundColor = [UIColor colorWithRed:0.23 green:0.48 blue:0.96 alpha:0.55];
+        config.cornerRadius = 6.0;
+        config.backgroundInsets = NSDirectionalEdgeInsetsMake(1.0, 4.0, 1.0, 4.0);
+    } else {
+        config.backgroundColor = [UIColor clearColor];
+        config.cornerRadius = 0.0;
+    }
+    cell.backgroundColor = [UIColor clearColor];
+    cell.backgroundConfiguration = config;
+}
 
 //#import "../libs/libopenmpt/openmpt-trunk/include/modplug/include/libmodplug/modplug.h"
 
@@ -728,7 +758,11 @@ bool sysMonitorIsActive;
 -(void)stopLoopInfOnError {
     mLoopMode=0;
     [mplayer setLoopInf:0];
-    [btnLoopInf setTitleColor:[UIColor colorWithRed:0.3f green:0.3f blue:0.3f alpha:1.0f] forState:UIControlStateNormal];
+    if (is_macOS) {
+        MDZStyleMacLoopInfButton(btnLoopInf, NO);
+    } else {
+        [btnLoopInf setTitleColor:[UIColor colorWithRed:0.3f green:0.3f blue:0.3f alpha:1.0f] forState:UIControlStateNormal];
+    }
     buttonLoopList.hidden=NO;
     buttonLoopListSel.hidden=YES;
     buttonLoopTitleSel.hidden=YES;
@@ -737,7 +771,11 @@ bool sysMonitorIsActive;
 -(void)setLoopInf:(int)mode {
     if (mode==1) {
         [mplayer setLoopInf:1];
-        [btnLoopInf setTitleColor:[UIColor colorWithRed:0.3f green:0.5f blue:1.0f alpha:1.0f] forState:UIControlStateNormal];
+        if (is_macOS) {
+            MDZStyleMacLoopInfButton(btnLoopInf, YES);
+        } else {
+            [btnLoopInf setTitleColor:[UIColor colorWithRed:0.3f green:0.5f blue:1.0f alpha:1.0f] forState:UIControlStateNormal];
+        }
         if ([mplayer isPlaying]) {
             int arcidx=[mplayer getArcIndex];
             if (arcidx) {
@@ -752,7 +790,11 @@ bool sysMonitorIsActive;
         }
     } else  {
         [mplayer setLoopInf:0];
-        [btnLoopInf setTitleColor:[UIColor colorWithRed:0.3f green:0.3f blue:0.3f alpha:1.0f] forState:UIControlStateNormal];
+        if (is_macOS) {
+            MDZStyleMacLoopInfButton(btnLoopInf, NO);
+        } else {
+            [btnLoopInf setTitleColor:[UIColor colorWithRed:0.3f green:0.3f blue:0.3f alpha:1.0f] forState:UIControlStateNormal];
+        }
         if ([mplayer isPlaying]) {
             int arcidx=[mplayer getArcIndex];
             if (arcidx) {
@@ -2563,6 +2605,9 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
         if (is_macOS && macPlayerLayout) {
             [self mdzSyncMacCommandChrome];
         }
+        if (is_macOS) {
+            [self mdzHighlightMacCurrentSubsong];
+        }
         self.pauseBarSub.hidden=YES;
         self.playBarSub.hidden=YES;
         self.pauseBar.hidden=YES;
@@ -2955,7 +3000,10 @@ int qsort_ComparePlEntriesRev(const void *entryA, const void *entryB) {
 
 int recording=0;
 - (IBAction)showEQ {
-    if (is_macOS && macBottomRow) {
+    if (is_macOS && macPlayerLayout) {
+        nvdsp_EQ = !nvdsp_EQ;
+        [EQViewController backupEQSettings];
+        [self mdzSyncMacCommandChrome];
         return;
     }
     if (bShowEQ) {
@@ -4017,9 +4065,8 @@ int recording=0;
     if (is_macOS) {
         btnShowSubSong.hidden=YES;
         btnShowVoices.hidden=YES;
-        eqButton.hidden=YES;
         if (voicesVC) [voicesVC resetVoicesButtons];
-        if (macSubsongTable) [macSubsongTable reloadData];
+        [self mdzReloadMacSubsongTable];
     } else if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
     else btnShowSubSong.hidden=true;
     if (!is_macOS) {
@@ -4442,9 +4489,8 @@ int recording=0;
     if (is_macOS) {
         btnShowSubSong.hidden=YES;
         btnShowVoices.hidden=YES;
-        eqButton.hidden=YES;
         if (voicesVC) [voicesVC resetVoicesButtons];
-        if (macSubsongTable) [macSubsongTable reloadData];
+        [self mdzReloadMacSubsongTable];
     } else if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
     else btnShowSubSong.hidden=true;
     if (!is_macOS) {
@@ -4890,9 +4936,8 @@ int recording=0;
     if (is_macOS) {
         btnShowSubSong.hidden=YES;
         btnShowVoices.hidden=YES;
-        eqButton.hidden=YES;
         if (voicesVC) [voicesVC resetVoicesButtons];
-        if (macSubsongTable) [macSubsongTable reloadData];
+        [self mdzReloadMacSubsongTable];
     } else if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
     else btnShowSubSong.hidden=true;
     if (!is_macOS) {
@@ -5505,6 +5550,16 @@ static void MDZMoveViewToHost(UIView *view, UIView *host) {
     }
 }
 
+static void MDZMacClearTitleShadow(UIButton *btn) {
+    if (!btn) {
+        return;
+    }
+    btn.titleLabel.shadowOffset = CGSizeZero;
+    [btn setTitleShadowColor:[UIColor clearColor] forState:UIControlStateNormal];
+    [btn setTitleShadowColor:[UIColor clearColor] forState:UIControlStateHighlighted];
+    [btn setTitleShadowColor:[UIColor clearColor] forState:UIControlStateSelected];
+}
+
 static void MDZStyleMacAccessoryButton(UIButton *btn) {
     if (!btn) {
         return;
@@ -5516,8 +5571,15 @@ static void MDZStyleMacAccessoryButton(UIButton *btn) {
         [bb setStyle:BButtonStyleBootstrapV3];
         [bb setColor:fill];
         bb.buttonCornerRadius = @10;
+        MDZMacClearTitleShadow(bb);
+        UIFont *faFont = [UIFont fontWithName:kFontAwesomeFont size:15.0];
+        if (faFont) {
+            bb.titleLabel.font = faFont;
+        }
         [bb setTitleColor:fg forState:UIControlStateNormal];
+        [bb setTitleColor:fg forState:UIControlStateHighlighted];
         bb.tintColor = fg;
+        bb.clipsToBounds = YES;
         return;
     }
     if (@available(iOS 15.0, *)) {
@@ -5529,9 +5591,63 @@ static void MDZStyleMacAccessoryButton(UIButton *btn) {
     btn.tintColor = fg;
     btn.adjustsImageWhenHighlighted = YES;
     btn.contentEdgeInsets = UIEdgeInsetsMake(7, 7, 7, 7);
+    MDZMacClearTitleShadow(btn);
     if (btn.imageView) {
         btn.imageView.contentMode = UIViewContentModeScaleAspectFit;
     }
+}
+
+static void MDZStyleMacLoopInfButton(UIButton *btn, BOOL on) {
+    if (!btn) {
+        return;
+    }
+    MDZStyleMacAccessoryButton(btn);
+    if (@available(iOS 15.0, *)) {
+        btn.configuration = nil;
+    }
+    [btn setImage:nil forState:UIControlStateNormal];
+    [btn setImage:nil forState:UIControlStateHighlighted];
+    [btn setTitle:@"∞" forState:UIControlStateNormal];
+    btn.titleLabel.font = [UIFont systemFontOfSize:20.0 weight:UIFontWeightRegular];
+    btn.titleLabel.adjustsFontSizeToFitWidth = YES;
+    btn.titleLabel.minimumScaleFactor = 0.7;
+    btn.titleLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
+    btn.contentEdgeInsets = UIEdgeInsetsMake(0, 1, 2, 1);
+    btn.contentHorizontalAlignment = UIControlContentHorizontalAlignmentCenter;
+    btn.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
+    MDZMacClearTitleShadow(btn);
+    UIColor *fg = [UIColor colorWithWhite:1.0 alpha:on ? 0.95 : 0.42];
+    [btn setTitleColor:fg forState:UIControlStateNormal];
+    [btn setTitleColor:fg forState:UIControlStateHighlighted];
+    btn.tintColor = fg;
+}
+
+static void MDZStyleMacEqToggle(UIButton *btn, BOOL on) {
+    if (!btn) {
+        return;
+    }
+    MDZStyleMacAccessoryButton(btn);
+    UIColor *fill = [UIColor colorWithWhite:1.0 alpha:on ? 0.22 : 0.10];
+    UIColor *fg = [UIColor colorWithWhite:1.0 alpha:on ? 0.95 : 0.42];
+    btn.accessibilityLabel = NSLocalizedString(@"Equalizer", @"");
+    btn.accessibilityValue = on ? NSLocalizedString(@"On", @"") : NSLocalizedString(@"Off", @"");
+    if ([btn isKindOfClass:[BButton class]]) {
+        BButton *bb = (BButton *)btn;
+        [bb setColor:fill];
+        MDZMacClearTitleShadow(bb);
+        UIFont *faFont = [UIFont fontWithName:kFontAwesomeFont size:15.0];
+        if (faFont) {
+            bb.titleLabel.font = faFont;
+        }
+        [bb setTitleColor:fg forState:UIControlStateNormal];
+        [bb setTitleColor:fg forState:UIControlStateHighlighted];
+        bb.tintColor = fg;
+        return;
+    }
+    btn.backgroundColor = fill;
+    btn.tintColor = fg;
+    MDZMacClearTitleShadow(btn);
+    [btn setTitleColor:fg forState:UIControlStateNormal];
 }
 
 static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
@@ -5593,7 +5709,7 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
         CGFloat pad = 24.0;
         BOOL radio = [radioSource isActive];
         NSInteger leftN = 4;
-        NSInteger rightN = radio ? 4 : 3;
+        NSInteger rightN = radio ? 5 : 4;
         CGFloat leftW = accSide * leftN + accGap * (leftN - 1);
         CGFloat rightW = accSide * rightN + accGap * (rightN - 1);
         left.backgroundColor = [UIColor clearColor];
@@ -5625,6 +5741,7 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
                              CGRectMake(x, 0, side, side));
     x += side + gap;
     MDZPlaceMacAccessorySlot(@[btnLoopInf], CGRectMake(x, 0, side, side));
+    MDZStyleMacLoopInfButton(btnLoopInf, mplayer && mplayer.mLoopMode == 1);
     x += side + gap;
     MDZPlaceMacAccessorySlot(@[mainRating5, mainRating5off], CGRectMake(x, 0, side, side));
 
@@ -5660,10 +5777,11 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
         playlistPos.text = [self mdzMacNowPlayingMeta];
     }
 
-    NSArray *rightViews = @[btnAddToPl, btnSaveFile, btnRadioPrevList, btnRecordScreen, infoButton];
+    NSArray *rightViews = @[btnAddToPl, btnSaveFile, btnRadioPrevList, btnRecordScreen, eqButton, infoButton];
     for (UIView *view in rightViews) {
         MDZMoveViewToHost(view, right);
     }
+    eqButton.hidden = NO;
     if ([radioSource isActive]) {
         btnSaveFile.hidden = NO;
         btnRadioPrevList.hidden = NO;
@@ -5677,6 +5795,9 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
         x += side + gap;
         MDZPlaceMacAccessorySlot(@[btnRecordScreen], CGRectMake(x, 0, side, side));
         x += side + gap;
+        MDZPlaceMacAccessorySlot(@[eqButton], CGRectMake(x, 0, side, side));
+        MDZStyleMacEqToggle(eqButton, nvdsp_EQ);
+        x += side + gap;
         MDZPlaceMacAccessorySlot(@[infoButton], CGRectMake(x, 0, side, side));
     } else {
         btnSaveFile.hidden = YES;
@@ -5687,6 +5808,9 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
         MDZPlaceMacAccessorySlot(@[btnAddToPl], CGRectMake(x, 0, side, side));
         x += side + gap;
         MDZPlaceMacAccessorySlot(@[btnRecordScreen], CGRectMake(x, 0, side, side));
+        x += side + gap;
+        MDZPlaceMacAccessorySlot(@[eqButton], CGRectMake(x, 0, side, side));
+        MDZStyleMacEqToggle(eqButton, nvdsp_EQ);
         x += side + gap;
         MDZPlaceMacAccessorySlot(@[infoButton], CGRectMake(x, 0, side, side));
     }
@@ -5704,12 +5828,17 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
     btnChangeTime.frame = labelTime.frame;
     labelModuleLength.frame = CGRectMake(progW - timeW - 8, py, timeW, 20);
     sliderProgressModule.frame = CGRectMake(8 + timeW + 8, MAX(0.0, (progH - sliderH) / 2.0), MAX(40.0, progW - timeW * 2.0 - 32.0), sliderH);
+    MDZMacStyleSlider(sliderProgressModule, 4.0, 14.0);
+    sliderProgressModule.backgroundColor = [UIColor clearColor];
+    sliderProgressModule.layer.cornerRadius = 0;
     labelTime.textAlignment = NSTextAlignmentCenter;
     labelModuleLength.textAlignment = NSTextAlignmentCenter;
-    labelTime.font = [UIFont monospacedDigitSystemFontOfSize:12.0 weight:UIFontWeightRegular];
-    labelModuleLength.font = [UIFont monospacedDigitSystemFontOfSize:12.0 weight:UIFontWeightRegular];
-    labelTime.textColor = [UIColor colorWithWhite:1.0 alpha:0.72];
-    labelModuleLength.textColor = [UIColor colorWithWhite:1.0 alpha:0.72];
+    labelTime.font = [UIFont monospacedDigitSystemFontOfSize:11.0 weight:UIFontWeightMedium];
+    labelModuleLength.font = [UIFont monospacedDigitSystemFontOfSize:11.0 weight:UIFontWeightMedium];
+    labelTime.textColor = [UIColor colorWithWhite:1.0 alpha:0.48];
+    labelModuleLength.textColor = [UIColor colorWithWhite:1.0 alpha:0.48];
+    labelTime.backgroundColor = [UIColor clearColor];
+    labelModuleLength.backgroundColor = [UIColor clearColor];
 }
 
 -(void)mdzBindMacTransportActions {
@@ -5758,17 +5887,74 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
         return;
     }
     [self mdzLayoutMacActionRow];
-    if (voicesVC) {
+    if (voicesVC && ![voicesVC isAdjustingPBRatio]) {
         [voicesVC resetVoicesButtons];
         voicesVC.scrollView.frame = voicesVC.view.bounds;
         [voicesVC recomputeFrames];
     }
-    if (macSubsongTable) {
-        [macSubsongTable reloadData];
-    }
+    [self mdzReloadMacSubsongTable];
     if (macPlayerLayout) {
         [macPlayerLayout syncEqualizerFromEngine];
     }
+}
+
+- (void)mdzReloadMacSubsongTable {
+    if (!is_macOS || !macSubsongTable) {
+        return;
+    }
+    [macSubsongTable reloadData];
+    [self mdzHighlightMacCurrentSubsong];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self mdzHighlightMacCurrentSubsong];
+    });
+}
+
+- (void)mdzHighlightMacCurrentSubsong {
+    if (!is_macOS || !macSubsongTable || !mplayer) {
+        return;
+    }
+    int count = mplayer.mod_subsongs;
+    if (count <= 0) {
+        [macSubsongTable selectRowAtIndexPath:nil animated:NO scrollPosition:UITableViewScrollPositionNone];
+        return;
+    }
+    int row = mplayer.mod_currentsub - mplayer.mod_minsub;
+    if (row < 0) {
+        row = 0;
+    }
+    if (row >= count) {
+        row = count - 1;
+    }
+    [self mdzHighlightMacSubsongRow:row scrollIfNeeded:YES];
+}
+
+- (void)mdzHighlightMacSubsongRow:(int)row scrollIfNeeded:(BOOL)scrollIfNeeded {
+    if (!macSubsongTable) {
+        return;
+    }
+    NSInteger count = [macSubsongTable numberOfRowsInSection:0];
+    if (row < 0 || row >= count) {
+        return;
+    }
+    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:row inSection:0];
+    NSIndexPath *selected = [macSubsongTable indexPathForSelectedRow];
+    if (selected && [selected row] == row) {
+        return;
+    }
+    UITableViewScrollPosition pos = UITableViewScrollPositionNone;
+    if (scrollIfNeeded) {
+        BOOL visible = NO;
+        for (NSIndexPath *path in [macSubsongTable indexPathsForVisibleRows]) {
+            if (path.row == row) {
+                visible = YES;
+                break;
+            }
+        }
+        if (!visible) {
+            pos = UITableViewScrollPositionMiddle;
+        }
+    }
+    [macSubsongTable selectRowAtIndexPath:indexPath animated:NO scrollPosition:pos];
 }
 
 -(void)mdzLayoutMacActionRow {
@@ -5782,7 +5968,6 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
     self.macBottomRow = macPlayerLayout.bottomRow;
     btnShowSubSong.hidden = YES;
     btnShowVoices.hidden = YES;
-    eqButton.hidden = YES;
 
     UIView *subBody = macPlayerLayout.subsongBody;
     UIView *voicesBody = macPlayerLayout.voicesBody;
@@ -5800,11 +5985,15 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
     }
     macSubsongTable.delegate = self;
     macSubsongTable.dataSource = self;
-    macSubsongTable.rowHeight = 28.0;
+    macSubsongTable.rowHeight = 30.0;
     macSubsongTable.sectionHeaderHeight = 0;
     macSubsongTable.backgroundColor = [UIColor clearColor];
-    macSubsongTable.separatorColor = [UIColor colorWithWhite:1.0 alpha:0.12];
+    macSubsongTable.separatorColor = [UIColor colorWithWhite:1.0 alpha:0.08];
+    macSubsongTable.separatorInset = UIEdgeInsetsMake(0, 8, 0, 8);
     macSubsongTable.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
+    macSubsongTable.indicatorStyle = UIScrollViewIndicatorStyleWhite;
+    macSubsongTable.allowsSelection = YES;
+    macSubsongTable.allowsMultipleSelection = NO;
     if (macSubsongTable != subBody) {
         macSubsongTable.frame = subFrame;
     }
@@ -5827,10 +6016,12 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
         voicesVC.scrollView.frame = voicesVC.view.bounds;
     }
     BOOL hasVoices = (mplayer && [mplayer isVoicesMutingSupported] && mplayer.numChannels > 0);
-    if (hasVoices && ![voicesVC hasVoiceButtons]) {
+    if (hasVoices && ![voicesVC hasVoiceButtons] && ![voicesVC isAdjustingPBRatio]) {
         [voicesVC resetVoicesButtons];
     }
-    [voicesVC recomputeFrames];
+    if (![voicesVC isAdjustingPBRatio]) {
+        [voicesVC recomputeFrames];
+    }
     macPlayerLayout.voicesEmptyLabel.text = hasVoices ? @"" : NSLocalizedString(@"No voices", @"");
     macPlayerLayout.voicesEmptyLabel.hidden = hasVoices;
     voicesVC.view.hidden = !hasVoices;
@@ -5860,6 +6051,7 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
     }
 
     [mainView bringSubviewToFront:macPlayerLayout];
+    [self mdzHighlightMacCurrentSubsong];
 }
 
 -(void)updateBarPos {
@@ -6431,7 +6623,7 @@ bool coverAvailable;
     if (self.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark) darkMode=true;
     if (oldmode!=darkMode) forceReloadCells=true;
     if (alertTableView) [alertTableView reloadData];
-    if (macSubsongTable) [macSubsongTable reloadData];
+    [self mdzReloadMacSubsongTable];
 }
 -(void) presentContextOGL {
     MGLLayer *oglLayer = (MGLLayer *)m_oglView.layer;
@@ -7155,7 +7347,9 @@ void pm_perfTest() {
     eqVC=nil;
     bShowEQ=false;
     
-    [sliderProgressModule setThumbImage:[UIImage imageNamed:@"slider.png" ] forState:UIControlStateNormal];
+    if (!is_macOS) {
+        [sliderProgressModule setThumbImage:[UIImage imageNamed:@"slider.png" ] forState:UIControlStateNormal];
+    }
     
     CHECK_PROFILE("various2a")
     
@@ -7238,9 +7432,11 @@ void pm_perfTest() {
     mRestart=0;
     mRestart_sub=0;
     
-    [sliderProgressModule.layer setCornerRadius:8.0];
+    if (!is_macOS) {
+        [sliderProgressModule.layer setCornerRadius:8.0];
+        [labelTime.layer setCornerRadius:8.0];
+    }
     [labelSeeking.layer setCornerRadius:8.0];
-    [labelTime.layer setCornerRadius:8.0];
     //[commandViewU.layer setCornerRadius:8.0];
     
     CHECK_PROFILE("various5")
@@ -7391,10 +7587,11 @@ void pm_perfTest() {
     [eqButton setTitleColor:(nvdsp_EQ?[UIColor whiteColor]:[UIColor grayColor]) forState:UIControlStateNormal];
     [eqButton addAwesomeIcon:FAIconSliders beforeTitle:YES];
     if (is_macOS) {
-        UIFont *faFont = [UIFont fontWithName:kFontAwesomeFont size:MDZ_MAC_SYMBOL_POINT_SIZE];
+        UIFont *faFont = [UIFont fontWithName:kFontAwesomeFont size:15.0];
         btnShowSubSong.titleLabel.font = faFont;
         btnShowVoices.titleLabel.font = faFont;
         eqButton.titleLabel.font = faFont;
+        infoButton.titleLabel.font = faFont;
         [btnShowSubSong setTitle:[NSString fa_stringForFontAwesomeIcon:FAIconStackOverflow] forState:UIControlStateNormal];
         [btnShowVoices setTitle:[NSString fa_stringForFontAwesomeIcon:FAIconMusic] forState:UIControlStateNormal];
         [eqButton setTitle:[NSString fa_stringForFontAwesomeIcon:FAIconSliders] forState:UIControlStateNormal];
@@ -7908,7 +8105,7 @@ void pm_perfTest() {
     if (self.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark) darkMode=true;
     if (oldmode!=darkMode) forceReloadCells=true;
     if (alertTableView) [alertTableView reloadData];
-    if (macSubsongTable) [macSubsongTable reloadData];
+    [self mdzReloadMacSubsongTable];
     
     alertCannotPlay_displayed=0;
     //[[UIApplication sharedApplication] setStatusBarStyle:UIStatusBarStyleLightContent animated:YES];
@@ -11613,8 +11810,15 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
         } else {
             topLabel.text=NSLocalizedString(@"No subsong", @"");
         }
-        topLabel.font = [UIFont systemFontOfSize:13 weight:MDZ_UIFONT_WEIGHT];
-        topLabel.frame = CGRectMake(8, 0, tabView.bounds.size.width - 16, 28);
+        topLabel.tag = kMDZMacSubsongLabelTag;
+        topLabel.frame = CGRectMake(8, 0, tabView.bounds.size.width - 16, 30);
+        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+        cell.configurationUpdateHandler = ^(UITableViewCell *updatedCell, UICellConfigurationState *state) {
+            MDZStyleMacSubsongCell(updatedCell, state.selected || state.highlighted);
+        };
+        BOOL isCurrent = (mplayer.mod_subsongs > 0)
+            && (indexPath.row == (mplayer.mod_currentsub - mplayer.mod_minsub));
+        MDZStyleMacSubsongCell(cell, isCurrent);
     }
     
     return cell;
@@ -11641,7 +11845,18 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
     return NO;
 }
 
-
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (!(macSubsongTable && tableView == macSubsongTable)) {
+        return;
+    }
+    BOOL isCurrent = (mplayer.mod_subsongs > 0)
+        && (indexPath.row == (mplayer.mod_currentsub - mplayer.mod_minsub));
+    NSIndexPath *selected = [tableView indexPathForSelectedRow];
+    if (selected && selected.row == indexPath.row) {
+        isCurrent = YES;
+    }
+    MDZStyleMacSubsongCell(cell, isCurrent);
+}
 
 #pragma mark Table view delegate
 
@@ -11651,7 +11866,7 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
             return;
         }
         [self didSelectRowInAlertSubController:indexPath.row];
-        [macSubsongTable reloadData];
+        [self mdzHighlightMacSubsongRow:(int)indexPath.row scrollIfNeeded:NO];
         return;
     }
     // Navigation logic may go here. Create and push another view controller.

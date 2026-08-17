@@ -3,7 +3,7 @@
 //  modizer
 //
 //  Left-column chrome. Open XIB/MacSidebarLayout.xib in Interface Builder
-//  (Freeform 420x48). The UISegmentedControl in Tab Segment Host is the
+//  (Freeform 420x56). The UISegmentedControl in Tab Segment Host is the
 //  real tab bar used at runtime. Drag that host to center the tabs.
 //
 
@@ -18,5 +18,6 @@
 + (instancetype)loadFromNib;
 
 - (void)prepareForRuntime;
+- (void)styleTabSegment;
 
 @end

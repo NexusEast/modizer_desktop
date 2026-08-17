@@ -84,7 +84,8 @@ extern void *LoadingProgressObserverContext;
 #define MDZ_MAC_ACTION_ROW_HEIGHT 200.0
 #define MDZ_MAC_PANEL_GAP 8.0
 #define MDZ_MAC_TRANSPORT_SIDE 64.0
-#define MDZ_MAC_SIDEBAR_SEGMENT_HEIGHT 28.0
+#define MDZ_MAC_SIDEBAR_SEGMENT_HEIGHT 36.0
+#define MDZ_MAC_SIDEBAR_BAR_HEIGHT 56.0
 #define MDZ_MAC_COMMAND_HEIGHT 64.0
 #define MDZ_MAC_BUTTON_SIDE 36.0
 #define MDZ_MAC_BUTTON_STEP 44.0
@@ -189,6 +190,50 @@ static inline void MDZFitCellTrailingIcons(UITableViewCell *cell, UIButton *acti
         bf.size.width = MAX(24.0, xRight - 8.0 - bf.origin.x);
         bottomLabel.frame = bf;
     }
+}
+
+static inline UIImage *MDZMacResizableTrack(UIColor *color, CGFloat height) {
+    CGFloat h = MAX(3.0, height);
+    CGSize size = CGSizeMake(h + 4.0, h);
+    UIGraphicsBeginImageContextWithOptions(size, NO, 0);
+    [color setFill];
+    [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, size.width, size.height) cornerRadius:h / 2.0] fill];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    CGFloat cap = size.width / 2.0;
+    return [img resizableImageWithCapInsets:UIEdgeInsetsMake(0, cap, 0, cap)];
+}
+
+static inline UIImage *MDZMacRoundThumb(CGFloat diameter) {
+    CGFloat d = MAX(10.0, diameter);
+    CGFloat pad = 3.0;
+    CGSize size = CGSizeMake(d + pad * 2.0, d + pad * 2.0);
+    UIGraphicsBeginImageContextWithOptions(size, NO, 0);
+    CGRect oval = CGRectMake(pad, pad, d, d);
+    UIBezierPath *halo = [UIBezierPath bezierPathWithOvalInRect:CGRectInset(oval, -1.2, -1.2)];
+    [[UIColor colorWithWhite:0.0 alpha:0.22] setFill];
+    [halo fill];
+    UIBezierPath *dot = [UIBezierPath bezierPathWithOvalInRect:oval];
+    [[UIColor whiteColor] setFill];
+    [dot fill];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return img;
+}
+
+static inline void MDZMacStyleSlider(UISlider *slider, CGFloat trackH, CGFloat thumbD) {
+    if (!slider) {
+        return;
+    }
+    UIColor *played = [UIColor colorWithWhite:0.96 alpha:0.95];
+    UIColor *rest = [UIColor colorWithWhite:1.0 alpha:0.16];
+    [slider setMinimumTrackImage:MDZMacResizableTrack(played, trackH) forState:UIControlStateNormal];
+    [slider setMaximumTrackImage:MDZMacResizableTrack(rest, trackH) forState:UIControlStateNormal];
+    UIImage *thumb = MDZMacRoundThumb(thumbD);
+    [slider setThumbImage:thumb forState:UIControlStateNormal];
+    [slider setThumbImage:thumb forState:UIControlStateHighlighted];
+    slider.minimumTrackTintColor = nil;
+    slider.maximumTrackTintColor = nil;
 }
 
 static inline UIView *MDZMacDisclosureAccessory(void) {

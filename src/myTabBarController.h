@@ -83,12 +83,15 @@
 @property (nonatomic, retain) UICollectionViewDiffableDataSource *sidebarDataSource;
 @property (nonatomic, retain) UISegmentedControl *macSidebarSegment;
 @property (nonatomic, retain) MacSidebarLayout *macSidebarLayout;
+@property (nonatomic, retain) UIButton *macSidebarBackButton;
+@property (nonatomic, weak) UINavigationController *macObservedNav;
 #endif
 
 -(void) openURL:(NSURL *)url;
 -(void) presentWelcomePages;
 #if TARGET_OS_MACCATALYST
 -(BOOL)mdzShowPlayerOnDetailSide;
+-(void)mdzPinMacSidebarSearchBars;
 #endif
 
 @end

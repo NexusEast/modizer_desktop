@@ -494,11 +494,33 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
     if (!self.detailViewController) self.detailViewController = [self findChildOfClass:[DetailViewControllerIphone class] inTabBarController:tbc];
 }
 
+- (void)mdzPinMacTableToViewBottom {
+    if (!self.tableView || !self.view) {
+        return;
+    }
+    NSMutableArray *toDrop = [NSMutableArray array];
+    for (NSLayoutConstraint *c in self.view.constraints) {
+        BOOL touchesTableBottom =
+            ((c.firstItem == self.tableView && c.firstAttribute == NSLayoutAttributeBottom) ||
+             (c.secondItem == self.tableView && c.secondAttribute == NSLayoutAttributeBottom));
+        if (touchesTableBottom) {
+            [toDrop addObject:c];
+        }
+    }
+    if (toDrop.count) {
+        [NSLayoutConstraint deactivateConstraints:toDrop];
+    }
+    self.tableView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.tableView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor].active = YES;
+}
+
 - (void)viewDidLoad {
     START_PROFILE
     childController=nil;
     
-    if ([NSProcessInfo processInfo].isiOSAppOnMac) {
+    if (MDZIsMacDesktop()) {
+        self.hidesBottomBarWhenPushed = NO;
+    } else if ([NSProcessInfo processInfo].isiOSAppOnMac) {
         self.hidesBottomBarWhenPushed = YES;
     } else if (@available(iOS 18.0, *)) {
         if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
@@ -535,6 +557,9 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
     //self.tableView.pagingEnabled;
     self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.tableView.sectionHeaderHeight = 18;
+    self.tableView.sectionFooterHeight = 0;
+    self.tableView.estimatedSectionFooterHeight = 0;
+    self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
     self.tableView.rowHeight = MDZIsMacDesktop() ? MDZ_MAC_TABLE_ROW_HEIGHT : 40;
     self.tableView.separatorInset = UIEdgeInsetsMake(0, 16, 0, MDZIsMacDesktop() ? 20 : 16);
     if (MDZIsMacDesktop()) {
@@ -544,6 +569,9 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
         self.tableView.clipsToBounds = YES;
         self.tableView.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(0, MDZ_MAC_CELL_LEADING_PAD, 0, 20);
         self.view.clipsToBounds = YES;
+        self.edgesForExtendedLayout = UIRectEdgeAll;
+        self.extendedLayoutIncludesOpaqueBars = YES;
+        [self mdzPinMacTableToViewBottom];
     }
     
     popTipViewRow=-1;
@@ -2393,10 +2421,12 @@ static int shouldRestart=1;
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     MDZAdaptVisibleMacTableCells(self.tableView);
-    if (MDZIsMacDesktop() && sBar && sBar.superview == self.view) {
-        CGFloat top = self.view.safeAreaInsets.top;
-        sBar.frame = CGRectMake(0, top, CGRectGetWidth(self.view.bounds), 44.0);
+#if TARGET_OS_MACCATALYST
+    if (MDZIsMacDesktop()) {
+        myTabBarController *tabs = (myTabBarController *)self.tabBarController;
+        [tabs mdzPinMacSidebarSearchBars];
     }
+#endif
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -2515,6 +2545,14 @@ As a consequence, some entries might disappear from existing playlist.\n\
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
     return nil;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
+    return CGFLOAT_MIN;
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
+    return [[UIView alloc] initWithFrame:CGRectZero];
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {

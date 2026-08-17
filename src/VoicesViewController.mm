@@ -12,7 +12,16 @@
 extern volatile t_settings settings[MAX_SETTINGS];
 
 @interface VoicesViewController ()
+@property (nonatomic, strong) NSTimer *mdzPBRatioCommitTimer;
+@end
 
+@interface MDZMacTempoSlider : UISlider
+@end
+
+@implementation MDZMacTempoSlider
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    return CGRectContainsPoint(CGRectInset(self.bounds, -10.0, -16.0), point);
+}
 @end
 
 @implementation VoicesViewController
@@ -23,6 +32,11 @@ extern volatile t_settings settings[MAX_SETTINGS];
 #include "AlertsCommonFunctions.h"
 
 -(IBAction) closeView {
+    if (self.mdzPBRatioCommitTimer) {
+        [self.mdzPBRatioCommitTimer invalidate];
+        self.mdzPBRatioCommitTimer = nil;
+        [self mdzCommitPBRatioSlider];
+    }
     [self viewWillDisappear:NO];
     [self.view removeFromSuperview];
     [self removeFromParentViewController];
@@ -62,6 +76,14 @@ extern volatile t_settings settings[MAX_SETTINGS];
     
     self.view.backgroundColor=[UIColor colorWithWhite:0 alpha:0.2];
     self.scrollView.backgroundColor=[UIColor colorWithWhite:0 alpha:0];
+    if (MDZIsMacDesktop()) {
+        self.view.backgroundColor = [UIColor clearColor];
+        self.scrollView.backgroundColor = [UIColor clearColor];
+        self.scrollView.showsHorizontalScrollIndicator = NO;
+        self.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+        self.scrollView.delaysContentTouches = NO;
+        self.scrollView.canCancelContentTouches = NO;
+    }
     
     [super viewDidLoad];
     // Do any additional setup after loading the view from its nib.
@@ -266,17 +288,34 @@ extern volatile t_settings settings[MAX_SETTINGS];
         [pbRatioSwitch setTitle:[NSString stringWithFormat:@"%C %@",FAIconHourglass,NSLocalizedString(@"Tempo",@"")] forState:UIControlStateNormal];
     }
     [detailViewController settingsChanged:SETTINGS_ALL];
+    [SettingsGenViewController backupSettings];
 }
 
-- (void)sliderPBRatioChanged:(OBSlider*)sender {
-    settings[GLOB_PBRATIO].detail.mdz_slider.slider_value=round(((OBSlider*)sender).value*20)/20;
-    pbRatioLblValue.text=[NSString stringWithFormat:@"%.2f",settings[GLOB_PBRATIO].detail.mdz_slider.slider_value];
+- (BOOL)isAdjustingPBRatio {
+    return pbRatioValue && pbRatioValue.tracking;
 }
 
-- (void)sliderPBRatioEndChange:(OBSlider*)sender {
-    ((OBSlider*)sender).value=round(((OBSlider*)sender).value*20)/20; //limit to 1 digit
-    [self sliderPBRatioChanged:sender]; //take update into account
-    [detailViewController settingsChanged:SETTINGS_ALL];
+- (void)mdzCommitPBRatioSlider {
+    self.mdzPBRatioCommitTimer = nil;
+    if (pbRatioValue) {
+        pbRatioValue.value = round(pbRatioValue.value * 20.0) / 20.0;
+        settings[GLOB_PBRATIO].detail.mdz_slider.slider_value = pbRatioValue.value;
+        pbRatioLblValue.text = [NSString stringWithFormat:@"%.2f", settings[GLOB_PBRATIO].detail.mdz_slider.slider_value];
+    }
+    [detailViewController.mplayer optGENPBRatio];
+    [SettingsGenViewController backupSettings];
+}
+
+- (void)sliderPBRatioChanged:(UISlider*)sender {
+    settings[GLOB_PBRATIO].detail.mdz_slider.slider_value = sender.value;
+    pbRatioLblValue.text = [NSString stringWithFormat:@"%.2f", sender.value];
+    [detailViewController.mplayer optGENPBRatio];
+}
+
+- (void)sliderPBRatioEndChange:(UISlider*)sender {
+    [self.mdzPBRatioCommitTimer invalidate];
+    self.mdzPBRatioCommitTimer = nil;
+    [self mdzCommitPBRatioSlider];
 }
 
 - (void) recomputeFrames {
@@ -284,34 +323,43 @@ extern volatile t_settings settings[MAX_SETTINGS];
     if (no_reentrant) return;
     no_reentrant=true;
     if ([detailViewController.mplayer isVoicesMutingSupported]&&detailViewController.mplayer.numChannels) {
-        CGFloat scrollW = CGRectGetWidth(self.scrollView.bounds);
-        if (scrollW < 8.0) {
-            scrollW = CGRectGetWidth(self.view.bounds);
+        CGFloat fullW = CGRectGetWidth(self.scrollView.bounds);
+        if (fullW < 8.0) {
+            fullW = CGRectGetWidth(self.view.bounds);
         }
-        int cols_nb = (int)(scrollW / 115.0);
+        CGFloat inset = MDZIsMacDesktop() ? 10.0 : 0.0;
+        CGFloat innerW = MAX(8.0, fullW - inset * 2.0);
+        int cols_nb = (int)(innerW / 115.0);
         if (cols_nb < 1) {
             cols_nb = 1;
         }
-        int cols_width=(int)(scrollW/cols_nb);
-        int ypos=4;
-        int xpos=(self.scrollView.frame.size.width-cols_nb*cols_width)/2;
+        int cols_width=(int)(innerW/cols_nb);
+        int ypos = (int)inset;
+        int xpos=(int)(inset + (innerW - cols_nb * cols_width) / 2.0);
+        UIColor *sepColor = MDZIsMacDesktop()
+            ? [UIColor colorWithWhite:1.0 alpha:0.10]
+            : [UIColor colorWithWhite:0.5 alpha:1];
                 
         voicesAllOn.frame=CGRectMake(xpos,ypos,100,32);
         voicesAllOff.frame=CGRectMake(xpos+100+8,ypos,100,32);
         
         ypos+=32+8;
         
-        sep1.frame=CGRectMake(0, ypos, self.view.frame.size.width, 1);
+        sep1.frame=CGRectMake(inset, ypos, innerW, 1);
+        sep1.backgroundColor = sepColor;
         
         if (pbRatioSwitch) {
             ypos+=8;
             pbRatioSwitch.frame=CGRectMake(xpos,ypos,100,32);
-            pbRatioLblValue.frame=CGRectMake(xpos+100+8,ypos,30,32);
-            pbRatioValue.frame=CGRectMake(xpos+100+8+30,ypos,self.view.frame.size.width-(xpos+100+8+30+4),32);
+            pbRatioLblValue.frame=CGRectMake(xpos+100+8,ypos,36,32);
+            CGFloat sliderX = xpos+100+8+36;
+            CGFloat sliderH = MDZIsMacDesktop() ? 36.0 : 32.0;
+            pbRatioValue.frame=CGRectMake(sliderX,ypos + (32.0 - sliderH) / 2.0,MAX(40.0, inset + innerW - sliderX),sliderH);
             ypos+=32+8;
         }
         
-        sep2.frame=CGRectMake(0, ypos, self.view.frame.size.width, 1);
+        sep2.frame=CGRectMake(inset, ypos, innerW, 1);
+        sep2.backgroundColor = sepColor;
         
         ypos+=8;
         
@@ -321,24 +369,25 @@ extern volatile t_settings settings[MAX_SETTINGS];
             if ((i+1)%cols_nb) {
                 xpos+=cols_width;
             } else {
-                xpos=(self.scrollView.frame.size.width-cols_nb*cols_width)/2;
+                xpos=(int)(inset + (innerW - cols_nb * cols_width) / 2.0);
                 ypos+=32+8;
             }
         }
         
-        if (xpos!=(self.scrollView.frame.size.width-cols_nb*cols_width)/2) ypos+=32;
+        if (xpos!=(int)(inset + (innerW - cols_nb * cols_width) / 2.0)) ypos+=32;
         ypos+=8;
         
-        sep3.frame=CGRectMake(0, ypos, self.view.frame.size.width, 1);
+        sep3.frame=CGRectMake(inset, ypos, innerW, 1);
+        sep3.backgroundColor = sepColor;
         
         ypos+=8;
         
-        cols_nb=(int)(scrollW / 180.0);
+        cols_nb=(int)(innerW / 180.0);
         if (cols_nb < 1) {
             cols_nb = 1;
         }
-        cols_width=(int)(scrollW/cols_nb);
-        xpos=(self.scrollView.frame.size.width-cols_nb*cols_width)/2;
+        cols_width=(int)(innerW/cols_nb);
+        xpos=(int)(inset + (innerW - cols_nb * cols_width) / 2.0);
         int rows_nb=(detailViewController.mplayer.numChannels-1)/cols_nb+1;
         int ystart=ypos;
         for (int i=0;i<detailViewController.mplayer.numChannels;i++) {
@@ -351,20 +400,18 @@ extern volatile t_settings settings[MAX_SETTINGS];
                 xpos+=cols_width;
                 ypos=ystart;
             }
-            
-            /*if ((i+1)%cols_nb) {
-                xpos+=cols_width;
-            } else {
-                xpos=(self.scrollView.frame.size.width-cols_nb*cols_width)/2;
-                ypos+=40;
-            }*/
         }
-        self.scrollView.contentSize = CGSizeMake(self.view.frame.size.width, ystart+40*rows_nb+8);
+        self.scrollView.contentSize = CGSizeMake(fullW, ystart+40*rows_nb+inset+8);
     }
     no_reentrant=false;
 }
 
 - (void) removeVoicesButtons {
+    if (self.mdzPBRatioCommitTimer) {
+        [self.mdzPBRatioCommitTimer invalidate];
+        self.mdzPBRatioCommitTimer = nil;
+        [self mdzCommitPBRatioSlider];
+    }
     for (int i=0;i<SOUND_MAXMOD_CHANNELS;i++) {
         if (voices[i]) [voices[i] removeFromSuperview];
         if (voicesSolo[i]) [voicesSolo[i] removeFromSuperview];
@@ -398,6 +445,9 @@ extern volatile t_settings settings[MAX_SETTINGS];
 }
 
 - (void) resetVoicesButtons {
+    if ([self isAdjustingPBRatio]) {
+        return;
+    }
     [self removeVoicesButtons];
     if (!detailViewController.mplayer) {
         return;
@@ -433,15 +483,23 @@ extern volatile t_settings settings[MAX_SETTINGS];
                 pbRatioLblValue.text=[NSString stringWithFormat:@"%.2f",settings[GLOB_PBRATIO].detail.mdz_slider.slider_value];
                 [self.scrollView addSubview:pbRatioLblValue];
                 
-                pbRatioValue=[[OBSlider alloc] initWithFrame:CGRectMake(0,0,self.view.frame.size.width-32-8,30)];
+                pbRatioValue = MDZIsMacDesktop()
+                    ? [[MDZMacTempoSlider alloc] initWithFrame:CGRectMake(0,0,self.view.frame.size.width-32-8,36)]
+                    : [[OBSlider alloc] initWithFrame:CGRectMake(0,0,self.view.frame.size.width-32-8,30)];
                 pbRatioValue.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleLeftMargin;
-                [pbRatioValue setMaximumValue:[detailViewController.mplayer pbRatioSupportedMax]];
-                [pbRatioValue setMinimumValue:[detailViewController.mplayer pbRatioSupportedMin]];
-                [pbRatioValue setContinuous:true];
+                [pbRatioValue setMaximumValue:settings[GLOB_PBRATIO].detail.mdz_slider.slider_max_value];
+                [pbRatioValue setMinimumValue:settings[GLOB_PBRATIO].detail.mdz_slider.slider_min_value];
+                [pbRatioValue setContinuous:YES];
+                pbRatioValue.exclusiveTouch = YES;
                 pbRatioValue.value=settings[GLOB_PBRATIO].detail.mdz_slider.slider_value;
                 [pbRatioValue addTarget:self action:@selector(sliderPBRatioChanged:) forControlEvents:UIControlEventValueChanged];
                 [pbRatioValue addTarget:self action:@selector(sliderPBRatioEndChange:) forControlEvents:UIControlEventTouchUpOutside];
                 [pbRatioValue addTarget:self action:@selector(sliderPBRatioEndChange:) forControlEvents:UIControlEventTouchUpInside];
+                [pbRatioValue addTarget:self action:@selector(sliderPBRatioEndChange:) forControlEvents:UIControlEventTouchCancel];
+                [pbRatioValue addTarget:self action:@selector(sliderPBRatioEndChange:) forControlEvents:UIControlEventPrimaryActionTriggered];
+                if (MDZIsMacDesktop()) {
+                    MDZMacStyleSlider(pbRatioValue, 4.0, 16.0);
+                }
                 [self.scrollView addSubview:pbRatioValue];
                 
                 

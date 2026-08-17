@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
     int systemsNb;
     
     BButton *pbRatioSwitch;
-    OBSlider *pbRatioValue;
+    UISlider *pbRatioValue;
     UILabel *pbRatioLblValue;
     
     NSString *currentPlayingFile;
@@ -45,6 +45,7 @@ NS_ASSUME_NONNULL_BEGIN
 -(IBAction) closeView;
 
 - (BOOL)hasVoiceButtons;
+- (BOOL)isAdjustingPBRatio;
 
 @end
 

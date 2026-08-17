@@ -37,6 +37,8 @@ extern BOOL nvdsp_EQ;
 - (void)prepareForRuntime {
     self.ibGuideLabel.hidden = YES;
     self.visualizerPlaceholder.hidden = YES;
+    self.eqApplySwitch.hidden = YES;
+    self.eqApplyLabel.hidden = YES;
     NSArray *hosts = @[
         self.commandLeftHost ?: [NSNull null],
         self.commandTitleHost ?: [NSNull null],
@@ -80,7 +82,8 @@ extern BOOL nvdsp_EQ;
     [self mdzLayoutPanel:self.eqPanel title:self.eqTitle body:self.eqBody];
     if (self.voicesEmptyLabel) {
         CGRect b = self.voicesBody.bounds;
-        self.voicesEmptyLabel.frame = CGRectMake(8.0, MAX(0.0, (CGRectGetHeight(b) - 20.0) / 2.0), MAX(8.0, CGRectGetWidth(b) - 16.0), 20.0);
+        self.voicesEmptyLabel.frame = CGRectMake(4.0, MAX(0.0, (CGRectGetHeight(b) - 20.0) / 2.0), MAX(8.0, CGRectGetWidth(b) - 8.0), 20.0);
+        self.voicesEmptyLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.42];
         self.voicesEmptyLabel.adjustsFontSizeToFitWidth = YES;
         self.voicesEmptyLabel.minimumScaleFactor = 0.7;
     }
@@ -116,8 +119,10 @@ extern BOOL nvdsp_EQ;
     self.bottomRow.frame = CGRectMake(12.0, botY, MAX(8.0, w - 24.0), botH);
     CGFloat trY = botY - trH;
     self.transportBar.frame = CGRectMake(0, trY, w, trH);
+    self.transportBar.backgroundColor = [UIColor clearColor];
     CGFloat progY = trY - progH;
-    self.progressBar.frame = CGRectMake(0, progY, w, progH);
+    self.progressBar.frame = CGRectMake(24.0, progY, MAX(8.0, w - 48.0), progH);
+    self.progressBar.backgroundColor = [UIColor clearColor];
     CGFloat vizY = cmdH;
     self.visualizerContainer.frame = CGRectMake(0, vizY, w, MAX(80.0, progY - vizY));
 }
@@ -172,20 +177,29 @@ extern BOOL nvdsp_EQ;
     }
     CGFloat w = CGRectGetWidth(panel.bounds);
     CGFloat h = CGRectGetHeight(panel.bounds);
-    CGFloat titleH = 28.0;
+    CGFloat titleH = 30.0;
+    CGFloat inset = 12.0;
     if (title) {
-        title.frame = CGRectMake(10.0, 4.0, MAX(0.0, w - 20.0), 22.0);
+        title.frame = CGRectMake(inset, 8.0, MAX(0.0, w - inset * 2.0), 20.0);
+        title.font = [UIFont systemFontOfSize:12.0 weight:UIFontWeightSemibold];
+        title.textColor = [UIColor colorWithWhite:1.0 alpha:0.62];
     }
     if (body) {
-        body.frame = CGRectMake(0.0, titleH, w, MAX(0.0, h - titleH));
+        body.frame = CGRectMake(inset, titleH, MAX(0.0, w - inset * 2.0), MAX(0.0, h - titleH - inset));
+        body.backgroundColor = [UIColor clearColor];
+        body.clipsToBounds = YES;
     }
 }
 
 - (void)mdzRoundPanel:(UIView *)panel {
-    panel.layer.cornerRadius = 8.0;
+    panel.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.045];
+    panel.layer.cornerRadius = 14.0;
     panel.layer.borderWidth = 1.0;
-    panel.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.14].CGColor;
+    panel.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.08].CGColor;
     panel.clipsToBounds = YES;
+    if (@available(iOS 13.0, *)) {
+        panel.layer.cornerCurve = kCACornerCurveContinuous;
+    }
 }
 
 - (UISlider *)mdzEqSliderAt:(NSInteger)index {
@@ -218,14 +232,18 @@ extern BOOL nvdsp_EQ;
         slider.minimumValue = -12;
         slider.maximumValue = 12;
         slider.transform = rotation;
-        [slider setThumbImage:[UIImage imageNamed:@"slider.png"] forState:UIControlStateNormal];
+        MDZMacStyleSlider(slider, 3.0, 11.0);
         [slider addTarget:self action:@selector(mdzEqSliderChanged:) forControlEvents:UIControlEventValueChanged];
         UILabel *freq = [self mdzEqFreqLabelAt:i];
         freq.textAlignment = NSTextAlignmentCenter;
+        freq.textColor = [UIColor colorWithWhite:1.0 alpha:0.42];
+        freq.font = [UIFont systemFontOfSize:9.0 weight:UIFontWeightMedium];
         freq.adjustsFontSizeToFitWidth = YES;
         freq.minimumScaleFactor = 0.55;
         UILabel *value = [self mdzEqValueLabelAt:i];
         value.textAlignment = NSTextAlignmentCenter;
+        value.textColor = [UIColor colorWithWhite:1.0 alpha:0.38];
+        value.font = [UIFont monospacedDigitSystemFontOfSize:9.0 weight:UIFontWeightRegular];
         value.adjustsFontSizeToFitWidth = YES;
         value.minimumScaleFactor = 0.55;
     }
@@ -242,23 +260,12 @@ extern BOOL nvdsp_EQ;
     if (w < 40.0 || h < 40.0) {
         return;
     }
-    CGFloat inset = 8.0;
-    UISwitch *sw = self.eqApplySwitch;
-    [sw sizeToFit];
-    CGFloat swW = sw ? MAX(51.0, CGRectGetWidth(sw.bounds)) : 51.0;
-    CGFloat swH = sw ? MAX(31.0, CGRectGetHeight(sw.bounds)) : 31.0;
-    CGFloat switchY = MAX(0.0, h - swH - 4.0);
-    if (sw) {
-        sw.frame = CGRectMake(inset, switchY, swW, swH);
-    }
-    if (self.eqApplyLabel) {
-        self.eqApplyLabel.frame = CGRectMake(inset + swW + 6.0, switchY, MAX(40.0, w - inset * 2.0 - swW - 6.0), swH);
-        self.eqApplyLabel.adjustsFontSizeToFitWidth = YES;
-        self.eqApplyLabel.minimumScaleFactor = 0.7;
-    }
+    CGFloat inset = 4.0;
+    self.eqApplySwitch.hidden = YES;
+    self.eqApplyLabel.hidden = YES;
     CGFloat freqH = 14.0;
     CGFloat valueH = 12.0;
-    CGFloat sliderH = MAX(36.0, switchY - freqH - valueH - 6.0);
+    CGFloat sliderH = MAX(36.0, h - freqH - valueH - 4.0);
     CGFloat usable = MAX(10.0, w - inset * 2.0);
     CGFloat slot = usable / (CGFloat)EQUALIZER_NB_BANDS;
     CGFloat sliderW = 20.0;
@@ -315,18 +322,21 @@ extern BOOL nvdsp_EQ;
         return;
     }
     UIColor *bg = prominent
-        ? [UIColor colorWithWhite:1.0 alpha:0.18]
-        : [UIColor colorWithWhite:1.0 alpha:0.07];
+        ? [UIColor whiteColor]
+        : [UIColor colorWithWhite:1.0 alpha:0.08];
+    UIColor *fg = prominent
+        ? [UIColor colorWithWhite:0.10 alpha:1.0]
+        : [UIColor whiteColor];
     if (@available(iOS 15.0, *)) {
         UIButtonConfiguration *cfg = [UIButtonConfiguration filledButtonConfiguration];
-        cfg.baseForegroundColor = [UIColor whiteColor];
+        cfg.baseForegroundColor = fg;
         cfg.baseBackgroundColor = bg;
         cfg.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
         cfg.image = image;
         cfg.contentInsets = NSDirectionalEdgeInsetsMake(0, 0, 0, 0);
         button.configuration = cfg;
     } else {
-        button.tintColor = [UIColor whiteColor];
+        button.tintColor = fg;
         button.backgroundColor = bg;
         [button setImage:image forState:UIControlStateNormal];
     }

@@ -6,8 +6,8 @@
 //  (not Main.storyboard and not EQViewController.xib). The canvas is a
 //  Freeform 1024x720 UIKit view: Command bar, visualizer, progress,
 //  transport buttons, and the three bottom panels including the EQ
-//  sliders and Apply switch. Those EQ controls are the ones used at
-//  runtime on Mac.
+//  sliders. EQ on/off lives with the other accessory buttons on the
+//  transport row. Those EQ sliders are the ones used at runtime on Mac.
 //
 //  This is a UIKit (Cocoa Touch) XIB because Mac Catalyst is UIKit, not
 //  AppKit. Interface Builder has no Mac device for UIKit files. If the

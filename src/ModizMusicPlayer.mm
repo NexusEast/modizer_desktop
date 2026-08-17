@@ -17942,16 +17942,16 @@ extern bool icloud_available;
 -(void) optGENPBRatio {
     float min=[self pbRatioSupportedMin];
     float max=[self pbRatioSupportedMax];
-    
-    if (settings[GLOB_PBRATIO].detail.mdz_slider.slider_value<min) settings[GLOB_PBRATIO].detail.mdz_slider.slider_value=min;
-    if (settings[GLOB_PBRATIO].detail.mdz_slider.slider_value>max) settings[GLOB_PBRATIO].detail.mdz_slider.slider_value=max;
+    float value=settings[GLOB_PBRATIO].detail.mdz_slider.slider_value;
+    if (value<min) value=min;
+    if (value>max) value=max;
     
     mdz_ratio_fp_cnt=0;
     
     if (settings[GLOB_PBRATIO_ONOFF].detail.mdz_boolswitch.switch_value) {
-        mdz_ratio_fp_inc=(1<<16)/settings[GLOB_PBRATIO].detail.mdz_slider.slider_value;
-        mdz_ratio_fp_inv_inc=(1<<16)*settings[GLOB_PBRATIO].detail.mdz_slider.slider_value;
-        mdz_pbratio=settings[GLOB_PBRATIO].detail.mdz_slider.slider_value;
+        mdz_ratio_fp_inc=(1<<16)/value;
+        mdz_ratio_fp_inv_inc=(1<<16)*value;
+        mdz_pbratio=value;
         if (mPlayType==MMP_FUR && furPlayer) furPlayer->setPlaybackSpeed(mdz_pbratio);
     } else {
         mdz_ratio_fp_inc=0;

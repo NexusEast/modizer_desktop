@@ -1,8 +1,12 @@
-![Modizer logo](logoMod12.png "Modizer logo")\
-Modizer Desktop
-=======
+<p align="center">
+  <img src="logoMod12.png" alt="Modizer logo" width="420">
+</p>
 
-![Modizer Desktop](docs/modizer-desktop.png)
+<h1 align="center">Modizer Desktop</h1>
+
+<p align="center">
+  <img src="docs/modizer-desktop.png" alt="Modizer Desktop">
+</p>
 
 This tree is the **Mac desktop** edition of Modizer: a fork of [yoyofr/modizer](https://github.com/yoyofr/modizer) built with **Mac Catalyst** (`modizer_mac` target), not an AppKit rewrite and not “Designed for iPad”.
 

@@ -24,6 +24,7 @@
 #import "CloudStorageManager.h"
 #import "AppDelegate_Phone.h"
 #import "MacSidebarLayout.h"
+#import "RootViewControllerLocalFolders.h"
 #import <objc/runtime.h>
 
 #if TARGET_OS_MACCATALYST
@@ -36,6 +37,9 @@
 - (void)mdzApplyMacTabBarHidden;
 - (void)mdzApplyMacSidebarNavChrome;
 - (void)mdzPinMacSidebarSearchBars;
+- (void)mdzEnsureMacSidebarBackButton;
+- (void)mdzMacSidebarBackTapped;
+- (void)mdzObserveSelectedNavIfNeeded;
 - (void)mdzHideSystemTabOverlays;
 - (void)mdzHideSystemTabOverlaysInView:(UIView *)view depth:(int)depth;
 - (void)mdzDumpTabLikeViews:(UIView *)view depth:(int)depth file:(FILE *)fp;
@@ -584,6 +588,7 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     }
     
     [self setViewControllers:filteredTabs animated:NO];
+    [self mdzInstallLocalFoldersTabIfNeeded];
     
     // iOS 15+ Fix: Reapply navigation bar appearance after setting view controllers
     if (@available(iOS 15.0, *)) {
@@ -651,6 +656,35 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
 //        self.tabBar.scrollEdgeAppearance = appearance;
 //    }
     END_PROFILE
+}
+
+- (void)mdzInstallLocalFoldersTabIfNeeded {
+    for (UIViewController *vc in self.viewControllers) {
+        UIViewController *root = vc;
+        if ([vc isKindOfClass:[UINavigationController class]]) {
+            root = ((UINavigationController *)vc).viewControllers.firstObject;
+        }
+        if ([root isKindOfClass:[RootViewControllerLocalFolders class]]) {
+            RootViewControllerLocalFolders *folders = (RootViewControllerLocalFolders *)root;
+            if (!folders.detailViewController) {
+                folders.detailViewController = self.detailViewControllerIphone;
+            }
+            return;
+        }
+    }
+    RootViewControllerLocalFolders *foldersVC = [[RootViewControllerLocalFolders alloc] init];
+    foldersVC.detailViewController = self.detailViewControllerIphone;
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:foldersVC];
+    nav.tabBarItem = [[UITabBarItem alloc] initWithTitle:NSLocalizedString(@"Local", @"")
+                                                   image:[UIImage systemImageNamed:@"folder.badge.plus"]
+                                                     tag:0];
+    NSMutableArray *tabs = [self.viewControllers mutableCopy] ?: [NSMutableArray array];
+    NSUInteger insertAt = tabs.count > 0 ? 1 : 0;
+    if (insertAt > tabs.count) {
+        insertAt = tabs.count;
+    }
+    [tabs insertObject:nav atIndex:insertAt];
+    [self setViewControllers:tabs animated:NO];
 }
 
 
@@ -840,6 +874,7 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     segment.apportionsSegmentWidthsByContent = NO;
     [segment addTarget:self action:@selector(mdzSidebarSegmentChanged:) forControlEvents:UIControlEventValueChanged];
     self.macSidebarSegment = segment;
+    [layout styleTabSegment];
     [self.view addSubview:layout];
     [layout prepareForRuntime];
     [self mdzLayoutMacSidebarSegment];
@@ -864,17 +899,105 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     }
 }
 
-- (void)mdzPinMacSidebarSearchBars {
+- (void)mdzMacSidebarBackTapped {
     UIViewController *selected = self.selectedViewController;
-    if ([selected isKindOfClass:[UINavigationController class]]) {
-        selected = ((UINavigationController *)selected).topViewController;
-    }
-    UIView *host = selected.view;
-    if (!host) {
+    if (![selected isKindOfClass:[UINavigationController class]]) {
         return;
     }
+    UINavigationController *nav = (UINavigationController *)selected;
+    if (nav.viewControllers.count > 1) {
+        [nav popViewControllerAnimated:YES];
+    }
+}
+
+- (void)mdzObserveSelectedNavIfNeeded {
+    UIViewController *selected = self.selectedViewController;
+    UINavigationController *nav = nil;
+    if ([selected isKindOfClass:[UINavigationController class]]) {
+        nav = (UINavigationController *)selected;
+    }
+    if (self.macObservedNav == nav) {
+        return;
+    }
+    if (self.macObservedNav) {
+        @try {
+            [self.macObservedNav removeObserver:self forKeyPath:@"viewControllers"];
+        } @catch (__unused NSException *ex) {
+        }
+        self.macObservedNav = nil;
+    }
+    if (!nav) {
+        return;
+    }
+    self.macObservedNav = nav;
+    [nav addObserver:self forKeyPath:@"viewControllers" options:NSKeyValueObservingOptionNew context:NULL];
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary<NSKeyValueChangeKey,id> *)change
+                       context:(void *)context {
+    if ([keyPath isEqualToString:@"viewControllers"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self mdzPinMacSidebarSearchBars];
+        });
+        return;
+    }
+    [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+}
+
+- (void)mdzEnsureMacSidebarBackButton {
+    if (self.macSidebarBackButton) {
+        return;
+    }
+    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+    if (@available(iOS 15.0, *)) {
+        btn.configuration = nil;
+    }
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:15.0
+                                                                                      weight:UIImageSymbolWeightSemibold
+                                                                                       scale:UIImageSymbolScaleMedium];
+    UIImage *img = [UIImage systemImageNamed:@"chevron.backward" withConfiguration:cfg];
+    [btn setImage:img forState:UIControlStateNormal];
+    btn.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.10];
+    btn.layer.cornerRadius = 10.0;
+    btn.clipsToBounds = YES;
+    btn.tintColor = [UIColor colorWithWhite:1.0 alpha:0.92];
+    btn.contentHorizontalAlignment = UIControlContentHorizontalAlignmentCenter;
+    btn.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
+    btn.contentEdgeInsets = UIEdgeInsetsZero;
+    btn.imageEdgeInsets = UIEdgeInsetsMake(1.0, -1.0, -1.0, 1.0);
+    btn.adjustsImageWhenHighlighted = NO;
+    btn.accessibilityLabel = NSLocalizedString(@"Back", @"");
+    [btn addTarget:self action:@selector(mdzMacSidebarBackTapped) forControlEvents:UIControlEventTouchUpInside];
+    self.macSidebarBackButton = btn;
+}
+
+- (void)mdzPinMacSidebarSearchBars {
+    [self mdzObserveSelectedNavIfNeeded];
+    UIViewController *selected = self.selectedViewController;
+    UINavigationController *nav = nil;
+    if ([selected isKindOfClass:[UINavigationController class]]) {
+        nav = (UINavigationController *)selected;
+        selected = nav.topViewController;
+    }
+    BOOL canPop = (nav && nav.viewControllers.count > 1);
+    [self mdzEnsureMacSidebarBackButton];
+    UIButton *back = self.macSidebarBackButton;
+    UIView *host = selected.view;
+    if (!host) {
+        back.hidden = YES;
+        return;
+    }
+    if (back.superview != host) {
+        [host addSubview:back];
+    }
+    back.hidden = !canPop;
     CGFloat top = host.safeAreaInsets.top;
     CGFloat width = CGRectGetWidth(host.bounds);
+    CGFloat searchH = 44.0;
+    CGFloat leading = canPop ? 52.0 : 0.0;
+    UISearchBar *barToAlign = nil;
     for (UIView *sub in host.subviews) {
         if (![sub isKindOfClass:[UISearchBar class]]) {
             continue;
@@ -883,7 +1006,30 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
         if (bar.superview != host) {
             continue;
         }
-        bar.frame = CGRectMake(0, top, width, 44.0);
+        if (bar.hidden || CGRectGetHeight(bar.frame) < 1.0) {
+            continue;
+        }
+        bar.frame = CGRectMake(leading, top, MAX(44.0, width - leading), searchH);
+        if (!barToAlign) {
+            barToAlign = bar;
+        }
+    }
+    if (canPop && barToAlign) {
+        [barToAlign layoutIfNeeded];
+        UIView *field = barToAlign.searchTextField;
+        CGRect fieldR = [field convertRect:field.bounds toView:host];
+        CGFloat side = CGRectGetHeight(fieldR);
+        CGFloat by = fieldR.origin.y;
+        if (side < 28.0 || CGRectIsEmpty(fieldR) || !field) {
+            side = 36.0;
+            by = top + (searchH - side) / 2.0;
+        } else if (side > 40.0) {
+            by += (side - 36.0) / 2.0;
+            side = 36.0;
+        }
+        back.frame = CGRectMake(8.0, by, side, side);
+        back.layer.cornerRadius = MIN(10.0, side / 2.0);
+        [host bringSubviewToFront:back];
     }
 }
 
@@ -901,20 +1047,24 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
         return;
     }
     MacSidebarLayout *layout = self.macSidebarLayout;
-    CGFloat barH = CGRectGetHeight(layout.bounds);
-    if (barH < 36.0) {
-        barH = 48.0;
-    }
+    CGFloat barH = MDZ_MAC_SIDEBAR_BAR_HEIGHT;
     CGFloat sysTop = self.view.safeAreaInsets.top - self.additionalSafeAreaInsets.top;
     if (sysTop < 0.0) {
         sysTop = 0.0;
     }
     CGFloat titleTop = MAX(sysTop, MDZ_MAC_TITLEBAR_HEIGHT);
     layout.frame = CGRectMake(0, titleTop, width, barH);
+    layout.backgroundColor = [UIColor colorWithWhite:0.07 alpha:1.0];
     layout.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
+    CGFloat padX = 16.0;
+    CGFloat padY = (barH - MDZ_MAC_SIDEBAR_SEGMENT_HEIGHT) / 2.0;
+    if (layout.tabHost) {
+        layout.tabHost.frame = CGRectMake(padX, padY, MAX(8.0, width - padX * 2.0), MDZ_MAC_SIDEBAR_SEGMENT_HEIGHT);
+    }
     if (self.macSidebarSegment && layout.tabHost) {
         self.macSidebarSegment.frame = layout.tabHost.bounds;
     }
+    [layout styleTabSegment];
     CGFloat neededTop = (titleTop - sysTop) + barH;
     if (fabs(self.additionalSafeAreaInsets.top - neededTop) > 0.5) {
         self.additionalSafeAreaInsets = UIEdgeInsetsMake(neededTop, 0, 0, 0);
@@ -927,6 +1077,7 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     NSInteger idx = sender.selectedSegmentIndex;
     if (idx >= 0 && idx < (NSInteger)self.viewControllers.count) {
         self.selectedIndex = (NSUInteger)idx;
+        [self mdzPinMacSidebarSearchBars];
     }
 }
 
@@ -1872,6 +2023,7 @@ ontoPrimaryViewController:(UIViewController *)primaryViewController {
             [navigationController setNavigationBarHidden:YES animated:NO];
             viewController.navigationItem.hidesBackButton = YES;
             viewController.navigationItem.leftBarButtonItem = nil;
+            [self mdzPinMacSidebarSearchBars];
         }
         return;
     }
