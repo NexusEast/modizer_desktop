@@ -5,7 +5,7 @@
 <h1 align="center">Modizer Desktop</h1>
 
 <p align="center">
-  <img src="docs/modizer-desktop.png" alt="Modizer Desktop">
+  <img src="docs/modizer-desktop.jpg" alt="Modizer Desktop">
 </p>
 
 This tree is the **Mac desktop** edition of Modizer: a fork of [yoyofr/modizer](https://github.com/yoyofr/modizer) built with **Mac Catalyst** (`modizer_mac` target), not an AppKit rewrite and not “Designed for iPad”.
