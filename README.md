@@ -2,6 +2,8 @@
 Modizer Desktop
 =======
 
+![Modizer Desktop](docs/modizer-desktop.png)
+
 This tree is the **Mac desktop** edition of Modizer: a fork of [yoyofr/modizer](https://github.com/yoyofr/modizer) built with **Mac Catalyst** (`modizer_mac` target), not an AppKit rewrite and not “Designed for iPad”.
 
 Window defaults to **1280×800**, minimum **900×640**, resizable. Official iOS Modizer: yoyofr.
