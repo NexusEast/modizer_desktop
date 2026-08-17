@@ -44,6 +44,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 -(IBAction) closeView;
 
+- (BOOL)hasVoiceButtons;
+
 @end
 
 NS_ASSUME_NONNULL_END

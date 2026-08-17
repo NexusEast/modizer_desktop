@@ -1,6 +1,29 @@
 ![Modizer logo](logoMod12.png "Modizer logo")\
-Modizer
+Modizer Desktop
 =======
+
+This tree is the **Mac desktop** edition of Modizer: a fork of [yoyofr/modizer](https://github.com/yoyofr/modizer) built with **Mac Catalyst** (`modizer_mac` target), not an AppKit rewrite and not “Designed for iPad”.
+
+Window defaults to **1280×800**, minimum **900×640**, resizable. Official iOS Modizer: yoyofr.
+
+## Building
+
+Requires a current Xcode on Apple Silicon. Open `modizer.xcodeproj`, select the **modizer mac local** scheme, destination **My Mac (Mac Catalyst)**.
+
+Before the first build, create the (gitignored) main database:
+
+```
+cd Resources/DB
+bash create_db.sh
+```
+
+That only creates the schema. To fill Modland/HVSC/ASMA indexes, run `bash update_all.sh` (downloads a large archive).
+
+This machine has no Apple Development certificate, so local Debug uses ad-hoc signing (`modizer/modizer-mac-local.entitlements`).
+
+The upstream README below still applies for libraries and iOS.
+
+---
 
 iOS modules, chip tunes, midi & vgm player with integration of various online DB (Modland, HVSC, ASMA, vgmrips, snesmusicv2, zxart, ...).
 

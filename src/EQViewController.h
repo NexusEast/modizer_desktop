@@ -31,4 +31,6 @@
 
 -(IBAction) closeView;
 
+- (void) recomputeFrames;
+
 @end

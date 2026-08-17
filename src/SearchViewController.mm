@@ -308,8 +308,12 @@ static NSFileManager *mFileMngr;
     
     lastSelectedSearch=0;
     
+#if TARGET_OS_MACCATALYST
+    self.navigationItem.rightBarButtonItem = nil;
+#else
     UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:NOW_PLAYING_ICON] style:UIBarButtonItemStylePlain target:self action:@selector(goPlayer)];
     self.navigationItem.rightBarButtonItem = item;
+#endif
     
     mFileMngr=[[NSFileManager alloc] init];
     

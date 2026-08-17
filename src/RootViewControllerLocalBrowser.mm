@@ -60,7 +60,8 @@ static volatile int mPopupAnimation=0;
 extern volatile t_settings settings[MAX_SETTINGS];
 
 #import "TTFadeAnimator.h"
-
+#import "myTabBarController.h"
+#import "ModizerConstants.h"
 
 @implementation RootViewControllerLocalBrowser
 
@@ -75,7 +76,7 @@ extern volatile t_settings settings[MAX_SETTINGS];
 @synthesize repeatTimer,activeKey;
 
 #pragma mark -
-#pragma mark Search functiçns
+#pragma mark Search functions
 #import "SearchCommonFunctions.h"
 
 
@@ -534,8 +535,16 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
     //self.tableView.pagingEnabled;
     self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.tableView.sectionHeaderHeight = 18;
-    self.tableView.rowHeight = 40;
-    self.tableView.separatorInset = UIEdgeInsetsZero;
+    self.tableView.rowHeight = MDZIsMacDesktop() ? MDZ_MAC_TABLE_ROW_HEIGHT : 40;
+    self.tableView.separatorInset = UIEdgeInsetsMake(0, 16, 0, MDZIsMacDesktop() ? 20 : 16);
+    if (MDZIsMacDesktop()) {
+        self.tableView.layoutMargins = UIEdgeInsetsMake(0, MDZ_MAC_CELL_LEADING_PAD, 0, 20);
+        self.tableView.cellLayoutMarginsFollowReadableWidth = NO;
+        self.tableView.insetsContentViewsToSafeArea = NO;
+        self.tableView.clipsToBounds = YES;
+        self.tableView.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(0, MDZ_MAC_CELL_LEADING_PAD, 0, 20);
+        self.view.clipsToBounds = YES;
+    }
     
     popTipViewRow=-1;
     popTipViewSection=-1;
@@ -563,8 +572,14 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
         //[currentPath retain];
     }
     
-    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:NOW_PLAYING_ICON] style:UIBarButtonItemStylePlain target:self action:@selector(goPlayer)];
+#if TARGET_OS_MACCATALYST
+    self.navigationItem.rightBarButtonItem = nil;
+#else
+    UIImageSymbolConfiguration *navCfg = [UIImageSymbolConfiguration configurationWithPointSize:17.0
+                                                                                          weight:UIImageSymbolWeightMedium];
+    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:NOW_PLAYING_ICON withConfiguration:navCfg] style:UIBarButtonItemStylePlain target:self action:@selector(goPlayer)];
     self.navigationItem.rightBarButtonItem = item;
+#endif
     
     /////////////////////////////////////
     // Waiting view
@@ -2183,7 +2198,13 @@ static int shouldRestart=1;
     [self.sBar setBarStyle:UIBarStyleDefault];
     
     self.navigationController.delegate = self;
-    [[self navigationController] setNavigationBarHidden:NO animated:YES];
+    if (MDZIsMacDesktop()) {
+        self.navigationItem.hidesBackButton = YES;
+        self.navigationItem.leftBarButtonItem = nil;
+        [[self navigationController] setNavigationBarHidden:YES animated:NO];
+    } else {
+        [[self navigationController] setNavigationBarHidden:NO animated:YES];
+    }
     [self.navigationController setNeedsStatusBarAppearanceUpdate];
     
     
@@ -2369,6 +2390,15 @@ static int shouldRestart=1;
     if ((!wasMiniPlayerOn) && [detailViewController mPlaylist_size]) [self showMiniPlayer];
 }
 
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    MDZAdaptVisibleMacTableCells(self.tableView);
+    if (MDZIsMacDesktop() && sBar && sBar.superview == self.view) {
+        CGFloat top = self.view.safeAreaInsets.top;
+        sBar.frame = CGRectMake(0, top, CGRectGetWidth(self.view.bounds), 44.0);
+    }
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     forceReloadCells=false;
@@ -2450,9 +2480,12 @@ As a consequence, some entries might disappear from existing playlist.\n\
     repeatingTimer = nil;
     
     NSString *observedSelector = NSStringFromSelector(@selector(hidden));
-    [detailViewController.waitingView removeObserver:self
-                                          forKeyPath:observedSelector
-                                             context:LoadingProgressObserverContext];
+    @try {
+        [detailViewController.waitingView removeObserver:self
+                                              forKeyPath:observedSelector
+                                                 context:LoadingProgressObserverContext];
+    } @catch (NSException *exception) {
+    }
     
     [super viewDidDisappear:animated];
 }
@@ -2553,7 +2586,9 @@ As a consequence, some entries might disappear from existing playlist.\n\
             cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:    CellIdentifierHeader];
         }
         
-        cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+        if (!MDZIsMacDesktop()) {
+            cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+        }
 //        [cell setBackgroundColor:[UIColor clearColor]];
 //        UIBackgroundConfiguration *backgroundConfig = [UIBackgroundConfiguration listGroupedCellConfiguration];
 //        backgroundConfig.backgroundColor = [UIColor systemGroupedBackgroundColor];
@@ -2616,7 +2651,7 @@ As a consequence, some entries might disappear from existing playlist.\n\
         bottomLabel.opaque=TRUE;
         
         bottomImageView = [[UIImageView alloc] initWithImage:nil];
-        bottomImageView.frame = CGRectMake(1.0*cell.indentationWidth,
+        bottomImageView.frame = CGRectMake(MDZCellLeadX(cell),
                                            22,
                                            14,14);
         bottomImageView.tag = BOTTOM_IMAGE_TAG;
@@ -2624,7 +2659,7 @@ As a consequence, some entries might disappear from existing playlist.\n\
         [cell.contentView addSubview:bottomImageView];
         
         coverImgView=[[UIImageView alloc] initWithImage:nil];
-        coverImgView.frame= CGRectMake(0,1,34,34);
+        coverImgView.frame= CGRectMake(MDZIsMacDesktop() ? MDZ_MAC_CELL_LEADING_PAD : 0,1,34,34);
         coverImgView.contentMode=UIViewContentModeScaleAspectFit;
         coverImgView.tag = COVER_IMAGE_TAG;
         coverImgView.opaque=TRUE;
@@ -2641,7 +2676,9 @@ As a consequence, some entries might disappear from existing playlist.\n\
         cell.accessoryView=nil;
         //        cell.selectionStyle=UITableViewCellSelectionStyleGray;
     } else {
-        cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+        if (!MDZIsMacDesktop()) {
+            cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+        }
         //topLabel = (UILabel *)[cell viewWithTag:TOP_LABEL_TAG];
         topLabel = (CBAutoScrollLabel *)[cell viewWithTag:TOP_LABEL_TAG];
         bottomLabel = (UILabel *)[cell viewWithTag:BOTTOM_LABEL_TAG];
@@ -2670,8 +2707,11 @@ As a consequence, some entries might disappear from existing playlist.\n\
         }
     }
     float margin=MDZ_TABVIEW_SEPARATOR_MARGIN;
-    cell.layoutMargins = UIEdgeInsetsMake(0, margin, 0, margin);
-    cell.separatorInset = UIEdgeInsetsMake(0, margin, 0, margin);
+    CGFloat trailing = MDZIsMacDesktop() ? 20.0 : margin;
+    cell.layoutMargins = UIEdgeInsetsMake(0, margin, 0, trailing);
+    cell.separatorInset = UIEdgeInsetsMake(0, margin, 0, trailing);
+    CGFloat leadX = MDZCellLeadX(cell);
+    coverImgView.frame = CGRectMake(MDZIsMacDesktop() ? MDZ_MAC_CELL_LEADING_PAD : 0, 1, 34, 34);
     
     actionView.hidden=TRUE;
     secActionView.hidden=TRUE;
@@ -2692,13 +2732,13 @@ As a consequence, some entries might disappear from existing playlist.\n\
     
     
     
-    topLabel.frame= CGRectMake(1.0 * cell.indentationWidth,
+    topLabel.frame= CGRectMake(leadX,
                                0,
-                               tabView.bounds.size.width -1.0 * cell.indentationWidth/*- 32*/,
+                               tabView.bounds.size.width -leadX/*- 32*/,
                                22);
-    bottomLabel.frame = CGRectMake(1.0 * cell.indentationWidth,
+    bottomLabel.frame = CGRectMake(leadX,
                                    22,
-                                   tabView.bounds.size.width -1.0 * cell.indentationWidth/*-32*/,
+                                   tabView.bounds.size.width -leadX/*-32*/,
                                    18);
     bottomLabel.text=@""; //default value
     bottomImageView.image=nil;
@@ -2730,17 +2770,17 @@ As a consequence, some entries might disappear from existing playlist.\n\
             
             
             
-            bottomLabel.frame = CGRectMake( 1.0 * cell.indentationWidth,
+            bottomLabel.frame = CGRectMake( leadX,
                                            22,
-                                           tabView.bounds.size.width -1.0 * cell.indentationWidth/*-32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-60,
+                                           tabView.bounds.size.width -leadX/*-32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-60,
                                            18);
             
             if (darkMode) topLabel.textColor=[UIColor colorWithRed:ACTION_COLOR_RED_DARKMODE green:ACTION_COLOR_GREEN_DARKMODE blue:ACTION_COLOR_BLUE_DARKMODE alpha:1.0];
             else topLabel.textColor=[UIColor colorWithRed:ACTION_COLOR_RED green:ACTION_COLOR_GREEN blue:ACTION_COLOR_BLUE alpha:1.0];
             
-            topLabel.frame= CGRectMake(1.0 * cell.indentationWidth,
+            topLabel.frame= CGRectMake(leadX,
                                        0,
-                                       tabView.bounds.size.width -1.0 * cell.indentationWidth/*- 32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-4-PRI_SEC_ACTIONS_IMAGE_SIZE,
+                                       tabView.bounds.size.width -leadX/*- 32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-4-PRI_SEC_ACTIONS_IMAGE_SIZE,
                                        22);
             
             [secActionView setImage:[UIImage imageNamed:@"playlist_add_all.png"] forState:UIControlStateNormal];
@@ -2782,17 +2822,17 @@ As a consequence, some entries might disappear from existing playlist.\n\
                     bottomLabel.text = [NSString stringWithFormat:@"%@-%@",NSLocalizedString(@"unavailable", @""),[CloudStorageSource displayNameForType:source.type]];
                 }
 
-                bottomLabel.frame = CGRectMake(1.0 * cell.indentationWidth,
+                bottomLabel.frame = CGRectMake(leadX,
                                                22,
-                                               tabView.bounds.size.width - 1.0 * cell.indentationWidth - PRI_SEC_ACTIONS_IMAGE_SIZE - 60,
+                                               tabView.bounds.size.width - leadX - PRI_SEC_ACTIONS_IMAGE_SIZE - 60,
                                                18);
 
                 UIColor *tintColor = [CloudStorageSource tintColorForType:source.type darkMode:darkMode];
                 topLabel.textColor = tintColor;
 
-                topLabel.frame = CGRectMake(1.0 * cell.indentationWidth,
+                topLabel.frame = CGRectMake(leadX,
                                             0,
-                                            tabView.bounds.size.width - 1.0 * cell.indentationWidth - PRI_SEC_ACTIONS_IMAGE_SIZE - 4 - PRI_SEC_ACTIONS_IMAGE_SIZE,
+                                            tabView.bounds.size.width - leadX - PRI_SEC_ACTIONS_IMAGE_SIZE - 4 - PRI_SEC_ACTIONS_IMAGE_SIZE,
                                             22);
 
                 // Show delete button for all sources except the auto-detected native iCloud source
@@ -2820,9 +2860,9 @@ As a consequence, some entries might disappear from existing playlist.\n\
                 cellValue = NSLocalizedString(@"Add Cloud Source", @"");
                 bottomLabel.text = NSLocalizedString(@"Browse iCloud, Dropbox, ...", @"");
 
-                bottomLabel.frame = CGRectMake(1.0 * cell.indentationWidth,
+                bottomLabel.frame = CGRectMake(leadX,
                                                22,
-                                               tabView.bounds.size.width - 1.0 * cell.indentationWidth - PRI_SEC_ACTIONS_IMAGE_SIZE - 60,
+                                               tabView.bounds.size.width - leadX - PRI_SEC_ACTIONS_IMAGE_SIZE - 60,
                                                18);
 
                 if (darkMode) {
@@ -2831,9 +2871,9 @@ As a consequence, some entries might disappear from existing playlist.\n\
                     topLabel.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.2 alpha:1.0];
                 }
 
-                topLabel.frame = CGRectMake(1.0 * cell.indentationWidth,
+                topLabel.frame = CGRectMake(leadX,
                                             0,
-                                            tabView.bounds.size.width - 1.0 * cell.indentationWidth - PRI_SEC_ACTIONS_IMAGE_SIZE - 4,
+                                            tabView.bounds.size.width - leadX - PRI_SEC_ACTIONS_IMAGE_SIZE - 4,
                                             22);
 
                 [secActionView setImage:[UIImage systemImageNamed:@"plus.circle.fill"] forState:UIControlStateNormal];
@@ -2850,7 +2890,10 @@ As a consequence, some entries might disappear from existing playlist.\n\
         }
     } else {
         
-        if (tabViewRefresh) return cell;
+        if (tabViewRefresh) {
+            MDZAdaptMacTableCell(cell, actionView, secActionView, topLabel, bottomLabel);
+            return cell;
+        }
         
         cellValue=cur_local_entries[indexPath.row].label;
         
@@ -2877,9 +2920,9 @@ As a consequence, some entries might disappear from existing playlist.\n\
                 hasImg=true;
             }
             
-            topLabel.frame= CGRectMake((hasImg?35:0)+1.0 * cell.indentationWidth,
+            topLabel.frame= CGRectMake((hasImg?35:0)+leadX,
                                        0,
-                                       -(hasImg?35:0)+tabView.bounds.size.width -1.0 * cell.indentationWidth/*- 32*/-32,
+                                       -(hasImg?35:0)+tabView.bounds.size.width -leadX/*- 32*/-32,
                                        40);
             
             int actionicon_offsetx=tabView.safeAreaInsets.right+tabView.safeAreaInsets.left;
@@ -2888,8 +2931,15 @@ As a consequence, some entries might disappear from existing playlist.\n\
             
             secActionView.frame = CGRectMake(tabView.bounds.size.width-2/*-32*/-actionicon_offsetx,0,PRI_SEC_ACTIONS_IMAGE_SIZE,PRI_SEC_ACTIONS_IMAGE_SIZE);
             
-            [secActionView setImage:[UIImage imageNamed:@"folder.png"] forState:UIControlStateNormal];
-            [secActionView setImage:[UIImage imageNamed:@"folder.png"] forState:UIControlStateHighlighted];
+            if (MDZIsMacDesktop()) {
+                UIImageSymbolConfiguration *chevCfg = [UIImageSymbolConfiguration configurationWithPointSize:12.0 weight:UIImageSymbolWeightSemibold];
+                [secActionView setImage:[UIImage systemImageNamed:@"chevron.right" withConfiguration:chevCfg] forState:UIControlStateNormal];
+                [secActionView setImage:[UIImage systemImageNamed:@"chevron.right" withConfiguration:chevCfg] forState:UIControlStateHighlighted];
+                secActionView.tintColor = [UIColor tertiaryLabelColor];
+            } else {
+                [secActionView setImage:[UIImage imageNamed:@"folder.png"] forState:UIControlStateNormal];
+                [secActionView setImage:[UIImage imageNamed:@"folder.png"] forState:UIControlStateHighlighted];
+            }
             [secActionView removeTarget: self action:NULL forControlEvents: UIControlEventTouchUpInside];
             [secActionView addTarget: self action: @selector(accessoryActionTapped:) forControlEvents: UIControlEventTouchUpInside];
             [dictActionBtn setObject:[NSNumber numberWithInteger:indexPath.row*100+indexPath.section] forKey:[[secActionView.description componentsSeparatedByString:@";"] firstObject]];
@@ -2958,9 +3008,9 @@ As a consequence, some entries might disappear from existing playlist.\n\
                 
             }
             
-            topLabel.frame= CGRectMake((hasImg?35:0)+1.0 * cell.indentationWidth,
+            topLabel.frame= CGRectMake((hasImg?35:0)+leadX,
                                        0,
-                                       -(hasImg?35:0)+tabView.bounds.size.width -1.0 * cell.indentationWidth/*- 32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-actionicon_offsetx,
+                                       -(hasImg?35:0)+tabView.bounds.size.width -leadX/*- 32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-actionicon_offsetx,
                                        22);
             
             actionView.frame = CGRectMake(tabView.bounds.size.width-2/*-32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-actionicon_offsetx,0,PRI_SEC_ACTIONS_IMAGE_SIZE,PRI_SEC_ACTIONS_IMAGE_SIZE);
@@ -3026,21 +3076,43 @@ As a consequence, some entries might disappear from existing playlist.\n\
             
             bottomLabel.text=bottomStr;
             
-            bottomImageView.frame = CGRectMake((hasImg?35:0) +1.0*cell.indentationWidth,
+            bottomImageView.frame = CGRectMake((hasImg?35:0) +leadX,
                                                24,
                                                14,14);
             
             
-            bottomLabel.frame = CGRectMake((bottomImageView.image?16:0)+(hasImg?35:0)+ 1.0 * cell.indentationWidth,
+            bottomLabel.frame = CGRectMake((bottomImageView.image?16:0)+(hasImg?35:0)+ leadX,
                                            22,
-                                           -(bottomImageView.image?16:0)-(hasImg?35:0)+tabView.bounds.size.width -1.0 * cell.indentationWidth/*-32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-40-actionicon_offsetx,
+                                           -(bottomImageView.image?16:0)-(hasImg?35:0)+tabView.bounds.size.width -leadX/*-32*/-PRI_SEC_ACTIONS_IMAGE_SIZE-40-actionicon_offsetx,
                                            18);
             
         }
     }
     topLabel.text = cellValue;
-    
+    MDZAdaptMacTableCell(cell, actionView, secActionView, topLabel, bottomLabel);
     return cell;
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    UIButton *actionView = (UIButton *)[cell.contentView viewWithTag:1004];
+    UIButton *secActionView = (UIButton *)[cell.contentView viewWithTag:1005];
+    UIView *topLabel = [cell.contentView viewWithTag:1001];
+    UIView *bottomLabel = [cell.contentView viewWithTag:1002];
+    MDZAdaptMacTableCell(cell, actionView, secActionView, topLabel, bottomLabel);
+    if (MDZIsMacDesktop()) {
+        __weak UITableViewCell *weakCell = cell;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UITableViewCell *c = weakCell;
+            if (!c.window) {
+                return;
+            }
+            UIButton *av = (UIButton *)[c.contentView viewWithTag:1004];
+            UIButton *sv = (UIButton *)[c.contentView viewWithTag:1005];
+            UIView *tl = [c.contentView viewWithTag:1001];
+            UIView *bl = [c.contentView viewWithTag:1002];
+            MDZAdaptMacTableCell(c, av, sv, tl, bl);
+        });
+    }
 }
 
 // Override to support conditional rearranging of the table view.
@@ -3585,6 +3657,12 @@ leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
     
     if (detailViewController.mPlaylist_size) {
         if (detailViewController) {
+#if TARGET_OS_MACCATALYST
+            AppDelegate_Phone *appDelegate = (AppDelegate_Phone *)[[UIApplication sharedApplication] delegate];
+            if (appDelegate.tabBarC && [appDelegate.tabBarC mdzShowPlayerOnDetailSide]) {
+                return;
+            }
+#endif
             @try {
                 [self.navigationController pushViewController:detailViewController animated:YES];
             } @catch (NSException * ex) {
@@ -3678,6 +3756,10 @@ leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
             [detailViewController play_listmodules:pl start_index:0];
                         
             [tableView reloadData];
+#if TARGET_OS_MACCATALYST
+            AppDelegate_Phone *appDelegate = (AppDelegate_Phone *)[[UIApplication sharedApplication] delegate];
+            [appDelegate.tabBarC mdzShowPlayerOnDetailSide];
+#endif
             
             free(pl);
         }
@@ -4270,6 +4352,10 @@ leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
                 [detailViewController play_listmodules:pl start_index:0];
 
                 if ([detailViewController.mplayer isPlaying]) [self showMiniPlayer];
+#if TARGET_OS_MACCATALYST
+                AppDelegate_Phone *appDelegate = (AppDelegate_Phone *)[[UIApplication sharedApplication] delegate];
+                [appDelegate.tabBarC mdzShowPlayerOnDetailSide];
+#endif
 
                 free(pl);
 

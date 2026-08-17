@@ -70,7 +70,9 @@ extern volatile t_settings settings[MAX_SETTINGS];
 
 - (void) viewWillDisappear:(BOOL)animated {
     detailViewController.bShowVC=false;
-    [self removeVoicesButtons];
+    if (!MDZIsMacDesktop()) {
+        [self removeVoicesButtons];
+    }
     [super viewWillDisappear:animated];
 }
 
@@ -282,8 +284,15 @@ extern volatile t_settings settings[MAX_SETTINGS];
     if (no_reentrant) return;
     no_reentrant=true;
     if ([detailViewController.mplayer isVoicesMutingSupported]&&detailViewController.mplayer.numChannels) {
-        int cols_nb=self.scrollView.frame.size.width/(115);
-        int cols_width=self.scrollView.frame.size.width/cols_nb;
+        CGFloat scrollW = CGRectGetWidth(self.scrollView.bounds);
+        if (scrollW < 8.0) {
+            scrollW = CGRectGetWidth(self.view.bounds);
+        }
+        int cols_nb = (int)(scrollW / 115.0);
+        if (cols_nb < 1) {
+            cols_nb = 1;
+        }
+        int cols_width=(int)(scrollW/cols_nb);
         int ypos=4;
         int xpos=(self.scrollView.frame.size.width-cols_nb*cols_width)/2;
                 
@@ -324,8 +333,11 @@ extern volatile t_settings settings[MAX_SETTINGS];
         
         ypos+=8;
         
-        cols_nb=self.scrollView.frame.size.width/(180);
-        cols_width=self.scrollView.frame.size.width/cols_nb;
+        cols_nb=(int)(scrollW / 180.0);
+        if (cols_nb < 1) {
+            cols_nb = 1;
+        }
+        cols_width=(int)(scrollW/cols_nb);
         xpos=(self.scrollView.frame.size.width-cols_nb*cols_width)/2;
         int rows_nb=(detailViewController.mplayer.numChannels-1)/cols_nb+1;
         int ystart=ypos;
@@ -387,9 +399,11 @@ extern volatile t_settings settings[MAX_SETTINGS];
 
 - (void) resetVoicesButtons {
     [self removeVoicesButtons];
-    if ([detailViewController.mplayer isPlaying]) {
-        currentPlayingFile=[detailViewController.mplayer mod_currentfile];
-        if ([detailViewController.mplayer isVoicesMutingSupported]&&detailViewController.mplayer.numChannels) {
+    if (!detailViewController.mplayer) {
+        return;
+    }
+    currentPlayingFile=[detailViewController.mplayer mod_currentfile];
+    if ([detailViewController.mplayer isVoicesMutingSupported]&&detailViewController.mplayer.numChannels) {
             voicesAllOn=[[BButton alloc] initWithFrame:CGRectMake(0,0,32,32) type:BButtonTypePrimary style:BButtonStyleBootstrapV2 icon:FAIconVolumeDown fontSize:12];
             [voicesAllOn addTarget:self action:@selector(pushedAllVoicesOn:) forControlEvents:UIControlEventTouchUpInside];
             [voicesAllOn setTitle:NSLocalizedString(@"All",@"") forState:UIControlStateNormal];
@@ -499,8 +513,11 @@ extern volatile t_settings settings[MAX_SETTINGS];
                 [self.scrollView addSubview:voices[i]];
             }
         }
-    }
 }
 
+
+- (BOOL)hasVoiceButtons {
+    return (voicesAllOn != nil);
+}
 
 @end

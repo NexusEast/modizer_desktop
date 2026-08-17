@@ -239,21 +239,76 @@ extern BOOL nvdsp_EQ;
     if (no_reentrant) return;
     no_reentrant=true;
 
-    for (int i=0;i<EQUALIZER_NB_BANDS;i++) {
-        eqSlider[i].frame=CGRectMake(10+(i+1)*(self.view.frame.size.width-8)/(EQUALIZER_NB_BANDS+2),32,16,self.view.frame.size.height/2);
-        eqLabelFreq[i].frame=CGRectMake(8+(i+1)*(self.view.frame.size.width-8)/(EQUALIZER_NB_BANDS+2),16,32,16);
-        eqLabelValue[i].frame=CGRectMake(8+(i+1)*(self.view.frame.size.width-8)/(EQUALIZER_NB_BANDS+2),self.view.frame.size.height/2+32,32,16);
-    }
-    minus12DB.frame=CGRectMake(4,self.view.frame.size.height/2+32-10,28,20);
-    plus12DB.frame=CGRectMake(4,32-10,28,20);
-    zeroDB.frame=CGRectMake(4,self.view.frame.size.height/4+32-10,28,20);
-    
-    globalGain.frame=CGRectMake(10+(self.view.frame.size.width-34),self.view.frame.size.height/2+32,32,16);
-    eqGlobalGain.frame=CGRectMake(10+(self.view.frame.size.width-34),32,16,self.view.frame.size.height/2);
-    
-    eqOnOff.frame=CGRectMake(80+10,self.view.frame.size.height/2+64,32,20);
+    CGFloat w = self.view.frame.size.width;
+    CGFloat h = self.view.frame.size.height;
+    BOOL compact = (h < 280.0);
+    CGFloat inset = compact ? 8.0 : 10.0;
+    CGFloat freqH = compact ? 14.0 : 16.0;
+    CGFloat valueH = compact ? 12.0 : 16.0;
+    [eqOnOff sizeToFit];
+    CGFloat swW = MAX(51.0, CGRectGetWidth(eqOnOff.bounds));
+    CGFloat swH = MAX(31.0, CGRectGetHeight(eqOnOff.bounds));
+    CGFloat switchRow = compact ? (swH + 6.0) : 28.0;
+    CGFloat topPad = compact ? freqH : 32.0;
+    CGFloat sliderH = compact ? MAX(40.0, h - topPad - valueH - switchRow - 4.0) : h / 2.0;
 
-    eqOnOffLbl.frame=CGRectMake(4,self.view.frame.size.height/2+64+2,80,20);
+    minus12DB.hidden = compact;
+    plus12DB.hidden = compact;
+    zeroDB.hidden = compact;
+    globalGain.hidden = compact;
+    eqGlobalGain.hidden = compact;
+
+    if (compact) {
+        CGFloat usable = MAX(10.0, w - inset * 2.0);
+        CGFloat slot = usable / (CGFloat)EQUALIZER_NB_BANDS;
+        CGFloat sliderW = 20.0;
+        for (int i=0;i<EQUALIZER_NB_BANDS;i++) {
+            CGFloat cx = inset + (i + 0.5) * slot;
+            eqSlider[i].frame=CGRectMake(cx - sliderW / 2.0, topPad, sliderW, sliderH);
+            eqLabelFreq[i].frame=CGRectMake(inset + i * slot, 0, slot, freqH);
+            eqLabelFreq[i].textAlignment = NSTextAlignmentCenter;
+            eqLabelFreq[i].adjustsFontSizeToFitWidth = YES;
+            eqLabelFreq[i].minimumScaleFactor = 0.55;
+            eqLabelFreq[i].font=[UIFont boldSystemFontOfSize:7];
+            eqLabelValue[i].frame=CGRectMake(inset + i * slot, topPad + sliderH, slot, valueH);
+            eqLabelValue[i].textAlignment = NSTextAlignmentCenter;
+            eqLabelValue[i].adjustsFontSizeToFitWidth = YES;
+            eqLabelValue[i].minimumScaleFactor = 0.55;
+            if (nvdsp_PEQ[i]) {
+                float freq = nvdsp_PEQ[i].centerFrequency;
+                if (freq >= 1000) {
+                    eqLabelFreq[i].text=[NSString stringWithFormat:@"%.0fk", freq / 1000.0f];
+                } else {
+                    eqLabelFreq[i].text=[NSString stringWithFormat:@"%.0f", freq];
+                }
+            }
+        }
+        CGFloat switchY = MAX(0.0, h - swH - 2.0);
+        eqOnOff.frame=CGRectMake(inset, switchY, swW, swH);
+        eqOnOffLbl.frame=CGRectMake(inset + swW + 6.0, switchY, MAX(40.0, w - inset * 2.0 - swW - 6.0), swH);
+        eqOnOffLbl.textAlignment = NSTextAlignmentLeft;
+        eqOnOffLbl.adjustsFontSizeToFitWidth = YES;
+        eqOnOffLbl.minimumScaleFactor = 0.7;
+    } else {
+        CGFloat bandW = (w - 8.0) / (EQUALIZER_NB_BANDS + 2);
+        for (int i=0;i<EQUALIZER_NB_BANDS;i++) {
+            CGFloat x = 10 + (i + 1) * bandW;
+            eqSlider[i].frame=CGRectMake(x, topPad, 16, sliderH);
+            eqLabelFreq[i].frame=CGRectMake(x - 8, MAX(0.0, topPad - 16), 32, 16);
+            eqLabelValue[i].frame=CGRectMake(x - 8, topPad + sliderH, 32, valueH);
+        }
+        minus12DB.frame=CGRectMake(4, topPad + sliderH - 10, 28, 20);
+        plus12DB.frame=CGRectMake(4, topPad - 10, 28, 20);
+        zeroDB.frame=CGRectMake(4, topPad + sliderH / 2.0 - 10, 28, 20);
+        globalGain.frame=CGRectMake(w - 34, topPad + sliderH, 32, 16);
+        eqGlobalGain.frame=CGRectMake(w - 34, topPad, 16, sliderH);
+        CGFloat switchY = h - switchRow + 2.0;
+        if (switchY < topPad + sliderH + valueH) {
+            switchY = topPad + sliderH + valueH;
+        }
+        eqOnOff.frame=CGRectMake(inset, switchY, swW, swH);
+        eqOnOffLbl.frame=CGRectMake(inset + swW + 6.0, switchY + 4.0, MAX(80.0, w - inset * 2.0 - swW - 6.0), 24);
+    }
     
     no_reentrant=false;
 }

@@ -54,19 +54,21 @@ bool mdz_macos_AOTplugin=false;
         windowScene.sizeRestrictions.minimumSize = CGSizeMake(MODIZER_MACM1_WIDTH_MIN, MODIZER_MACM1_HEIGHT_MIN);
         windowScene.sizeRestrictions.maximumSize = CGSizeMake(MODIZER_MACM1_WIDTH_MAX, MODIZER_MACM1_HEIGHT_MAX);
         if (@available(macCatalyst 16.0, *)) {
-            windowScene.sizeRestrictions.allowsFullScreen = YES;
-        } else {
-            // Fallback on earlier versions
+            windowScene.sizeRestrictions.allowsFullScreen = NO;
         }
     }
 #if TARGET_OS_MACCATALYST
     windowScene.sizeRestrictions.minimumSize = CGSizeMake(MODIZER_MACM1_WIDTH_MIN, MODIZER_MACM1_HEIGHT_MIN);
     windowScene.sizeRestrictions.maximumSize = CGSizeMake(MODIZER_MACM1_WIDTH_MAX, MODIZER_MACM1_HEIGHT_MAX);
     if (@available(macCatalyst 16.0, *)) {
-        windowScene.sizeRestrictions.allowsFullScreen = YES;
-    } else {
-        // Fallback on earlier versions
+        windowScene.sizeRestrictions.allowsFullScreen = NO;
     }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        Class macWindowManager = NSClassFromString(@"ModizerMacWindowManager");
+        if (macWindowManager && [macWindowManager respondsToSelector:NSSelectorFromString(@"applyDesktopWindowGeometry")]) {
+            [macWindowManager performSelector:NSSelectorFromString(@"applyDesktopWindowGeometry")];
+        }
+    });
 #endif
     
     // With automatic storyboard loading, the window and root VC are created by UIKit.
@@ -89,6 +91,11 @@ bool mdz_macos_AOTplugin=false;
         self.isWindowFloating = [[NSUserDefaults standardUserDefaults] boolForKey:@"WindowFloating"];
     
     [self loadMacPlugin];
+    
+    Class macWindowManager = NSClassFromString(@"ModizerMacWindowManager");
+    if (macWindowManager && [macWindowManager respondsToSelector:NSSelectorFromString(@"applyDesktopWindowGeometry")]) {
+        [macWindowManager performSelector:NSSelectorFromString(@"applyDesktopWindowGeometry")];
+    }
     
     // Appliquer l'état au démarrage
     if (self.isWindowFloating) {

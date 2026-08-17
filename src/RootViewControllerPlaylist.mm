@@ -193,8 +193,12 @@ extern volatile t_settings settings[MAX_SETTINGS];
     if (editing==FALSE) {
         if (mDetailPlayerMode) self.navigationItem.rightBarButtonItem = nil;
         else {
+#if TARGET_OS_MACCATALYST
+            self.navigationItem.rightBarButtonItem = nil;
+#else
             UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:NOW_PLAYING_ICON] style:UIBarButtonItemStylePlain target:self action:@selector(goPlayer)];
             self.navigationItem.rightBarButtonItem = item;
+#endif
         }
     }
     [tableView reloadData];
@@ -763,8 +767,12 @@ int qsort_ComparePlaylistEntriesRevFP(const void *entryA, const void *entryB) {
     
     if (mDetailPlayerMode) self.navigationItem.rightBarButtonItem = nil;
     else {
+#if TARGET_OS_MACCATALYST
+        self.navigationItem.rightBarButtonItem = nil;
+#else
         UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:NOW_PLAYING_ICON] style:UIBarButtonItemStylePlain target:self action:@selector(goPlayer)];
         self.navigationItem.rightBarButtonItem = item;
+#endif
     }
     if (show_playlist) {
         sBar.frame=CGRectMake(0,0,0,0);
@@ -2753,6 +2761,11 @@ int getPlaylistStatsDBmod(t_playlist *pl) {
     [mFileMngr createDirectoryAtPath:completePath withIntermediateDirectories:TRUE attributes:nil error:&err];
 }
 
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    MDZAdaptVisibleMacTableCells(self.tableView);
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     [self hideWaiting];
     
@@ -2773,9 +2786,12 @@ int getPlaylistStatsDBmod(t_playlist *pl) {
     repeatingTimer = nil;
     
     NSString *observedSelector = NSStringFromSelector(@selector(hidden));
-    [detailViewController.waitingView removeObserver:self
-                                          forKeyPath:observedSelector
-                                             context:LoadingProgressObserverContext];
+    @try {
+        [detailViewController.waitingView removeObserver:self
+                                              forKeyPath:observedSelector
+                                                 context:LoadingProgressObserverContext];
+    } @catch (NSException *exception) {
+    }
     if (self.mdzChangeObserverToken) {
         [[NSNotificationCenter defaultCenter] removeObserver:self.mdzChangeObserverToken];
         self.mdzChangeObserverToken = nil;
@@ -3177,7 +3193,9 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
     if (cell == nil) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
         
-        cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+        if (!MDZIsMacDesktop()) {
+            cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+        }
         
 //        [cell setBackgroundColor:[UIColor clearColor]];
 //        UIBackgroundConfiguration *backgroundConfig = [UIBackgroundConfiguration listGroupedCellConfiguration];
@@ -3302,7 +3320,9 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
     bottomLabel.text=@""; //default value
     bottomImageView.image=nil;
     cell.hidden=FALSE;
-    cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+    if (!MDZIsMacDesktop()) {
+        cell.frame=CGRectMake(0,0,tabView.frame.size.width,40);
+    }
     cell.accessoryType = UITableViewCellAccessoryNone;
     
     // Set up the cell...
@@ -3565,8 +3585,16 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
         }
     }
     topLabel.text = cellValue;
-    
+    MDZAdaptMacTableCell(cell, actionView, secActionView, topLabel, bottomLabel);
     return cell;
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    UIButton *actionView = (UIButton *)[cell.contentView viewWithTag:1004];
+    UIButton *secActionView = (UIButton *)[cell.contentView viewWithTag:1005];
+    UIView *topLabel = [cell.contentView viewWithTag:1001];
+    UIView *bottomLabel = [cell.contentView viewWithTag:1002];
+    MDZAdaptMacTableCell(cell, actionView, secActionView, topLabel, bottomLabel);
 }
 
 // Override to support editing the table view.

@@ -24,6 +24,15 @@
 }
 
 - (void)showMiniPlayer {
+#if TARGET_OS_MACCATALYST
+    [self hideMiniPlayer];
+    return;
+#else
+    if ([NSProcessInfo processInfo].isiOSAppOnMac) {
+        [self hideMiniPlayer];
+        return;
+    }
+#endif
     [self hideMiniPlayer];
     
     CGFloat safe_bottom=0;

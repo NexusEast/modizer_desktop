@@ -208,10 +208,10 @@
 		CCEB59832BAF42B2004831C6 /* Spc_Emu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Spc_Emu.cpp; sourceTree = "<group>"; };
 		CCEB59842BAF42B2004831C6 /* Nsfe_Emu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Nsfe_Emu.h; sourceTree = "<group>"; };
 		CCEB59852BAF42B2004831C6 /* Nes_Mmc5_Apu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Nes_Mmc5_Apu.h; sourceTree = "<group>"; };
-		CCEB59862BAF42B2004831C6 /* Spc_Filter.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Spc_Filter.cpp; sourceTree = "<group>"; };
+		CCEB59862BAF42B2004831C6 /* SPC_Filter.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SPC_Filter.cpp; sourceTree = "<group>"; };
 		CCEB59872BAF42B2004831C6 /* Ym2612_GENS.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Ym2612_GENS.h; sourceTree = "<group>"; };
 		CCEB59882BAF42B2004831C6 /* Multi_Buffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Multi_Buffer.h; sourceTree = "<group>"; };
-		CCEB59892BAF42B2004831C6 /* Spc_Filter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Spc_Filter.h; sourceTree = "<group>"; };
+		CCEB59892BAF42B2004831C6 /* SPC_Filter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SPC_Filter.h; sourceTree = "<group>"; };
 		CCEB598A2BAF42B2004831C6 /* Vgm_Emu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Vgm_Emu.cpp; sourceTree = "<group>"; };
 		CCEB598B2BAF42B2004831C6 /* Nes_Namco_Apu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Nes_Namco_Apu.h; sourceTree = "<group>"; };
 		CCEB598C2BAF42B2004831C6 /* Ym2413_Emu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Ym2413_Emu.h; sourceTree = "<group>"; };

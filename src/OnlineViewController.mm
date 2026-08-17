@@ -212,8 +212,12 @@ NSString *weblinks_Others[WEBLINKS_Others_NB][2]={
     // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
     // self.navigationItem.rightBarButtonItem = self.editButtonItem;
     
+#if TARGET_OS_MACCATALYST
+    self.navigationItem.rightBarButtonItem = nil;
+#else
     UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:NOW_PLAYING_ICON] style:UIBarButtonItemStylePlain target:self action:@selector(goPlayer)];
     self.navigationItem.rightBarButtonItem = item;
+#endif
     
     //    [self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"Cell"];
     //self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;

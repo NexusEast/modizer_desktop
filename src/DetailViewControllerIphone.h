@@ -55,6 +55,7 @@ struct Resources;
 @class CADisplayLink;
 @class EQViewController;
 @class VoicesViewController;
+@class MacPlayerLayout;
 @class RadioSource;
 
 enum {
@@ -77,6 +78,9 @@ enum {
     int not_expected_version;
     
     UITableView *alertTableView;
+    UITableView *macSubsongTable;
+    UIView *macBottomRow;
+    MacPlayerLayout *macPlayerLayout;
     
     //EQ
     EQViewController *eqVC;
@@ -305,6 +309,10 @@ enum {
 @property (nonatomic, retain) IBOutlet BButton *btnShowArcList,*btnShowSubSong,*btnShowVoices,*btnRecordScreen,*btnSaveFile,*btnAddToPl,*btnRadioPrevList;
 @property (nonatomic, retain) IBOutlet UIButton *buttonLoopTitleSel,*buttonLoopList,*buttonLoopListSel,*buttonShuffle,*buttonShuffleSel,*buttonShuffleOneSel,*btnLoopInf;
 @property (nonatomic, retain) IBOutlet UIToolbar *playBar,*pauseBar,*playBarSub,*pauseBarSub;
+@property (nonatomic, retain) UITableView *alertTableView;
+@property (nonatomic, retain) UITableView *macSubsongTable;
+@property (nonatomic, retain) UIView *macBottomRow;
+@property (nonatomic, retain) MacPlayerLayout *macPlayerLayout;
 
 @property (nonatomic, retain) IBOutlet OBSlider *sliderProgressModule;
 @property (nonatomic, retain) IBOutlet UITextView *textMessage;

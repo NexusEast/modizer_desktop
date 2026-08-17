@@ -166,6 +166,20 @@ extern unsigned int m_voice_oscillo_pal3[8];
 
 #import "EQViewController.h"
 #import "CloudStorageManager.h"
+#import "MacPlayerLayout.h"
+
+@interface DetailViewControllerIphone (MDZMacLayout)
+- (void)mdzApplyDesktopLayoutMetrics;
+- (void)mdzLayoutMacActionRow;
+- (void)mdzLayoutMacTransportBar;
+- (void)mdzInstallMacPlayerLayoutIfNeeded;
+- (void)mdzSyncMacVisualizerFrames;
+- (void)mdzSyncMacCommandChrome;
+- (void)mdzBindMacTransportActions;
+- (void)mdzRefreshMacBottomPanels;
+- (NSString *)mdzMacNowPlayingMeta;
+- (myTabBarController *)mdzTabBarController;
+@end
 
 //#import "../libs/libopenmpt/openmpt-trunk/include/modplug/include/libmodplug/modplug.h"
 
@@ -343,6 +357,7 @@ static int updMPNowCnt=0;
 @synthesize sliderProgressModule;
 @synthesize detailView,commandViewU,playlistPos;
 @synthesize playBar,pauseBar,playBarSub,pauseBarSub;
+@synthesize macSubsongTable,macBottomRow,macPlayerLayout;
 
 @synthesize mainView,infoView;
 @synthesize mainRating5,mainRating5off;
@@ -421,6 +436,9 @@ bool sysMonitorIsActive;
 }
 
 -(IBAction)showVoicesSelector:(id)sender {
+    if (is_macOS && macBottomRow) {
+        return;
+    }
     if (bShowVC) {
         [voicesVC viewWillDisappear:YES];
         [voicesVC.view removeFromSuperview];
@@ -2480,12 +2498,14 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
                 
                 labelArtist.text=mplayer.artist;
                 
-                if (labelArtist.text && [labelArtist.text length]) {
-                    labelModuleName.frame=CGRectMake(0,0,self.view.frame.size.width-128,22);
-                    labelArtist.frame=CGRectMake(0,22,self.view.frame.size.width-128,18);
-                } else {
-                    labelModuleName.frame=CGRectMake(0,0,self.view.frame.size.width-128,40);
-                    labelArtist.frame=CGRectMake(0,22,self.view.frame.size.width-128,0);
+                if (!(is_macOS && macPlayerLayout)) {
+                    if (labelArtist.text && [labelArtist.text length]) {
+                        labelModuleName.frame=CGRectMake(0,0,self.view.frame.size.width-128,22);
+                        labelArtist.frame=CGRectMake(0,22,self.view.frame.size.width-128,18);
+                    } else {
+                        labelModuleName.frame=CGRectMake(0,0,self.view.frame.size.width-128,40);
+                        labelArtist.frame=CGRectMake(0,22,self.view.frame.size.width-128,0);
+                    }
                 }
                 
                 if (settings[GLOB_TitleFilename].detail.mdz_boolswitch.switch_value==0) {
@@ -2506,13 +2526,17 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
         }
         [mplayer setInfosUpdated];
         if ((mplayer.mod_subsongs>1)/*&&(mOnlyCurrentSubEntry==0)*/) {
-            int mpl_arcCnt=[mplayer getArcEntriesCnt];
-            if (mpl_arcCnt) {
-                playlistPos.text=[NSString stringWithFormat:@"%d of %d/arc %d of %d/sub %d(%d,%d)",mPlaylist_pos+1,mPlaylist_size,
-                                  [mplayer getArcIndex]+1,mpl_arcCnt,
-                                  mplayer.mod_currentsub-mplayer.mod_minsub+1,1,mplayer.mod_subsongs];
+            if (is_macOS) {
+                playlistPos.text = [self mdzMacNowPlayingMeta];
             } else {
-                playlistPos.text=[NSString stringWithFormat:@"%d of %d/sub %d(%d,%d)",mPlaylist_pos+1,mPlaylist_size,mplayer.mod_currentsub-mplayer.mod_minsub+1,1,mplayer.mod_subsongs];
+                int mpl_arcCnt=[mplayer getArcEntriesCnt];
+                if (mpl_arcCnt) {
+                    playlistPos.text=[NSString stringWithFormat:@"%d of %d/arc %d of %d/sub %d(%d,%d)",mPlaylist_pos+1,mPlaylist_size,
+                                      [mplayer getArcIndex]+1,mpl_arcCnt,
+                                      mplayer.mod_currentsub-mplayer.mod_minsub+1,1,mplayer.mod_subsongs];
+                } else {
+                    playlistPos.text=[NSString stringWithFormat:@"%d of %d/sub %d(%d,%d)",mPlaylist_pos+1,mPlaylist_size,mplayer.mod_currentsub-mplayer.mod_minsub+1,1,mplayer.mod_subsongs];
+                }
             }
             //[pvSubSongSel reloadAllComponents];
             
@@ -2520,17 +2544,24 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
             [self dismissViewControllerAnimated:YES completion:nil];
             
             if (btnShowSubSong.hidden==true) {
-                if (mOnlyCurrentSubEntry==0) btnShowSubSong.hidden=false;
+                if (!is_macOS && mOnlyCurrentSubEntry==0) btnShowSubSong.hidden=false;
             }
             
             
         } else {
-            int mpl_arcCnt=[mplayer getArcEntriesCnt];
-            if (mpl_arcCnt) {
-                playlistPos.text=[NSString stringWithFormat:@"%d of %d/arc %d of %d",mPlaylist_pos+1,mPlaylist_size,
-                                  [mplayer getArcIndex]+1,mpl_arcCnt];
-            } else playlistPos.text=[NSString stringWithFormat:@"%d of %d",mPlaylist_pos+1,mPlaylist_size];
-            btnShowSubSong.hidden=true;
+            if (is_macOS) {
+                playlistPos.text = [self mdzMacNowPlayingMeta];
+            } else {
+                int mpl_arcCnt=[mplayer getArcEntriesCnt];
+                if (mpl_arcCnt) {
+                    playlistPos.text=[NSString stringWithFormat:@"%d of %d/arc %d of %d",mPlaylist_pos+1,mPlaylist_size,
+                                      [mplayer getArcIndex]+1,mpl_arcCnt];
+                } else playlistPos.text=[NSString stringWithFormat:@"%d of %d",mPlaylist_pos+1,mPlaylist_size];
+            }
+            if (!is_macOS) btnShowSubSong.hidden=true;
+        }
+        if (is_macOS && macPlayerLayout) {
+            [self mdzSyncMacCommandChrome];
         }
         self.pauseBarSub.hidden=YES;
         self.playBarSub.hidden=YES;
@@ -2924,6 +2955,9 @@ int qsort_ComparePlEntriesRev(const void *entryA, const void *entryB) {
 
 int recording=0;
 - (IBAction)showEQ {
+    if (is_macOS && macBottomRow) {
+        return;
+    }
     if (bShowEQ) {
         [eqVC viewWillDisappear:YES];
         [eqVC.view removeFromSuperview];
@@ -3980,12 +4014,20 @@ int recording=0;
     current_selmode=ARCSUB_MODE_NONE;
     [self dismissViewControllerAnimated:YES completion:nil];
     
-    if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
+    if (is_macOS) {
+        btnShowSubSong.hidden=YES;
+        btnShowVoices.hidden=YES;
+        eqButton.hidden=YES;
+        if (voicesVC) [voicesVC resetVoicesButtons];
+        if (macSubsongTable) [macSubsongTable reloadData];
+    } else if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
     else btnShowSubSong.hidden=true;
+    if (!is_macOS) {
     if ([mplayer isArchive]&&([mplayer getArcEntriesCnt]>1)&&(mOnlyCurrentEntry==0)) btnShowArcList.hidden=false;
     else btnShowArcList.hidden=true;
     if ([mplayer isVoicesMutingSupported]) btnShowVoices.hidden=false;
     else btnShowVoices.hidden=true;
+    }
     
     
     alertCannotPlay_displayed=0;
@@ -4096,6 +4138,7 @@ int recording=0;
     if (settings[GLOB_Notification].detail.mdz_switch.switch_value==2) {
         [self sendNotifPlayedTitle];
     }
+    [self mdzRefreshMacBottomPanels];
     return TRUE;
 }
 
@@ -4396,12 +4439,20 @@ int recording=0;
     current_selmode=ARCSUB_MODE_NONE;
     [self dismissViewControllerAnimated:YES completion:nil];
     
-    if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
+    if (is_macOS) {
+        btnShowSubSong.hidden=YES;
+        btnShowVoices.hidden=YES;
+        eqButton.hidden=YES;
+        if (voicesVC) [voicesVC resetVoicesButtons];
+        if (macSubsongTable) [macSubsongTable reloadData];
+    } else if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
     else btnShowSubSong.hidden=true;
+    if (!is_macOS) {
     if ([mplayer isArchive]&&([mplayer getArcEntriesCnt]>1)&&(mOnlyCurrentEntry==0)) btnShowArcList.hidden=false;
     else btnShowArcList.hidden=true;
     if ([mplayer isVoicesMutingSupported]) btnShowVoices.hidden=false;
     else btnShowVoices.hidden=true;
+    }
     
     alertCannotPlay_displayed=0;
     //Visualization stuff
@@ -4543,6 +4594,7 @@ int recording=0;
             [self sendNotifPlayedTitle];
         }
     }
+    [self mdzRefreshMacBottomPanels];
 }
 
 -(int) requestLoadNewFile:(NSString *)filePath fname:(NSString *)fileName arcidx:(int)arcidx subsong:(int)subsong {
@@ -4835,12 +4887,20 @@ int recording=0;
     current_selmode=ARCSUB_MODE_NONE;
     [self dismissViewControllerAnimated:YES completion:nil];
     
-    if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
+    if (is_macOS) {
+        btnShowSubSong.hidden=YES;
+        btnShowVoices.hidden=YES;
+        eqButton.hidden=YES;
+        if (voicesVC) [voicesVC resetVoicesButtons];
+        if (macSubsongTable) [macSubsongTable reloadData];
+    } else if ([mplayer isMultiSongs]&&(mOnlyCurrentSubEntry==0)) btnShowSubSong.hidden=false;
     else btnShowSubSong.hidden=true;
+    if (!is_macOS) {
     if ([mplayer isArchive]&&([mplayer getArcEntriesCnt]>1)&&(mOnlyCurrentEntry==0)) btnShowArcList.hidden=false;
     else btnShowArcList.hidden=true;
     if ([mplayer isVoicesMutingSupported]) btnShowVoices.hidden=false;
     else btnShowVoices.hidden=true;
+    }
     
     alertCannotPlay_displayed=0;
     //Visualization stuff
@@ -4978,6 +5038,7 @@ int recording=0;
     }
     mRestart=0;
     
+    [self mdzRefreshMacBottomPanels];
     return TRUE;
 }
 
@@ -5004,6 +5065,30 @@ int recording=0;
     return YES;
 }
 
+static void MDZLayoutCoverArt(UIView *coverView, UIView *gifView, CGRect container, BOOL compact) {
+    CGRect frame;
+    if (!compact) {
+        frame = CGRectMake(container.size.width/20.0,
+                           container.size.height/20.0,
+                           container.size.width - 2.0*container.size.width/20.0,
+                           container.size.height - 2.0*container.size.height/20.0);
+    } else {
+        CGFloat maxSide = MIN(container.size.width, container.size.height);
+        CGFloat side = MIN(maxSide * 0.40, MDZ_MAC_COVER_MAX_SIDE);
+        if (side < 140.0) {
+            side = MIN(maxSide * 0.55, 180.0);
+        }
+        frame = CGRectMake((container.size.width - side) / 2.0,
+                           (container.size.height - side) / 2.0,
+                           side,
+                           side);
+    }
+    coverView.frame = frame;
+    if (gifView) {
+        gifView.frame = CGRectMake(0, 0, frame.size.width, frame.size.height);
+    }
+}
+
 // Ensure that the view controller supports rotation and that the split view can therefore show in both portrait and landscape.
 - (BOOL)mdzUpdateUI:(UIInterfaceOrientation)interfaceOrientation {
     float width;
@@ -5027,11 +5112,7 @@ int recording=0;
             m_oglView.frame = CGRectMake(0.0, 0.0, mDevice_ww, mDevice_hh);
             //cover_viewBG.frame = CGRectMake(0, 0, mDevice_ww, mDevice_hh);//-230+80+44-safe_bottom);
             cover_viewAll.frame = m_oglView.frame;//CGRectMake(0, 0, mDevice_ww, mDevice_hh);//-230+80+44-safe_bottom);
-            
-            cover_view.frame = CGRectMake(cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height/20,
-                                          cover_viewAll.frame.size.width-2*cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height-2*cover_viewAll.frame.size.height/20);
+            MDZLayoutCoverArt(cover_view, gifAnimation, cover_viewAll.bounds, NO);
             
             if (bShowRadio) { radioView.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y+safe_top,mainView.frame.size.width,UI_RADIO_INFO_HEIGHT);
                 radioTitle.frame=CGRectMake(2,2,radioView.frame.size.width-2,14);
@@ -5042,7 +5123,7 @@ int recording=0;
                 statusbarHidden=NO;
                 [self setNeedsStatusBarAppearanceUpdate];
             }
-            [self.navigationController setNavigationBarHidden:NO animated:YES];
+            [self.navigationController setNavigationBarHidden:is_macOS animated:NO];
             
             float yofs;//=self.navigationItem.titleView.frame.size.height;
             //if (is_macOS) yofs+=70+42;
@@ -5053,8 +5134,9 @@ int recording=0;
                 pt=[self.view convertPoint:self.mainView.frame.origin toView:[UIApplication sharedApplication].keyWindow.rootViewController.view];
             }
             
-            //MDZILog("yo: %f",pt.y);
-            yofs=pt.y;
+            if (is_macOS) {
+                yofs = 0;
+            }
             
             // Use self.view.safeAreaInsets for more reliable results, especially on iOS 15
             safe_bottom=self.view.safeAreaInsets.bottom;
@@ -5063,15 +5145,45 @@ int recording=0;
             safe_right=self.view.safeAreaInsets.right;
             //            if (safe_bottom>0) safe_bottom+=20;
             //MDZILog("safe: %f %f %f %f",safe_bottom,safe_top,safe_left,safe_right);
+
+            CGFloat chromeTop = is_macOS ? MDZ_MAC_COMMAND_HEIGHT : 80.0;
+            CGFloat chromeBar = is_macOS ? MDZ_MAC_PLAY_BAR_HEIGHT : 44.0;
+            CGFloat actionRowH = is_macOS ? MDZ_MAC_ACTION_ROW_HEIGHT : 0.0;
+            CGFloat btnSide = is_macOS ? MDZ_MAC_BUTTON_SIDE : 32.0;
+            CGFloat btnStep = is_macOS ? MDZ_MAC_BUTTON_STEP : 36.0;
+            CGFloat infoSide = is_macOS ? MDZ_MAC_INFO_BUTTON_SIDE : 36.0;
+            CGFloat contentW = mDevice_ww-safe_left-safe_right;
             
             if (is_macOS||is_iPad) {
-                mainView.frame = CGRectMake(safe_left, 0, mDevice_ww-safe_left-safe_right, mDevice_hh-yofs);
-                m_oglView.frame = CGRectMake(0, 80, mDevice_ww-safe_left-safe_right, mDevice_hh-yofs-80-44-safe_bottom);
-                oglButton.frame = CGRectMake(0, 80, mDevice_ww-safe_left-safe_right, mDevice_hh-yofs-80-44-safe_bottom);
+                mainView.frame = CGRectMake(safe_left, 0, contentW, mDevice_hh-yofs);
+                if (is_macOS) {
+                    [self mdzInstallMacPlayerLayoutIfNeeded];
+                    if (macPlayerLayout) {
+                        macPlayerLayout.frame = CGRectMake(0, 0, contentW, MAX(80.0, mDevice_hh-yofs));
+                        commandViewU.hidden = YES;
+                        commandViewU.userInteractionEnabled = NO;
+                        [macPlayerLayout setNeedsLayout];
+                        [macPlayerLayout layoutIfNeeded];
+                        [self mdzSyncMacVisualizerFrames];
+                        [self mdzSyncMacCommandChrome];
+                    } else {
+                        m_oglView.frame = CGRectMake(0, chromeTop, contentW, MAX(80.0, mDevice_hh-yofs-chromeTop-chromeBar-actionRowH-safe_bottom));
+                        oglButton.frame = m_oglView.frame;
+                    }
+                } else {
+                    m_oglView.frame = CGRectMake(0, chromeTop, contentW, MAX(80.0, mDevice_hh-yofs-chromeTop-chromeBar-actionRowH-safe_bottom));
+                    oglButton.frame = m_oglView.frame;
+                }
+                mainView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+                m_oglView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+                playBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+                pauseBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+                playBarSub.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+                pauseBarSub.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
             } else{
                 mainView.frame = CGRectMake(0, 0, mDevice_ww, mDevice_hh-yofs);
-                m_oglView.frame = CGRectMake(safe_left, 80, mDevice_ww-safe_left-safe_right, mDevice_hh-yofs-80-44-safe_bottom);
-                oglButton.frame = CGRectMake(safe_left, 80, mDevice_ww-safe_left-safe_right, mDevice_hh-yofs-80-44-safe_bottom);
+                m_oglView.frame = CGRectMake(safe_left, chromeTop, contentW, mDevice_hh-yofs-chromeTop-chromeBar-safe_bottom);
+                oglButton.frame = CGRectMake(safe_left, chromeTop, contentW, mDevice_hh-yofs-chromeTop-chromeBar-safe_bottom);
                 if (gifAnimation) gifAnimation.frame = CGRectMake(0, 0,cover_view.frame.size.width,cover_view.frame.size.height);
             }
             
@@ -5081,45 +5193,45 @@ int recording=0;
             }
             
             cover_viewAll.frame = m_oglView.frame;//CGRectMake(0, 0, mDevice_ww, mDevice_hh-230+80+44-safe_bottom);
-            
-            cover_view.frame = CGRectMake(cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height/20,
-                                          cover_viewAll.frame.size.width-2*cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height-2*cover_viewAll.frame.size.height/20);
-            
-            
-            if (gifAnimation) gifAnimation.frame = CGRectMake(0, 0,cover_view.frame.size.width,cover_view.frame.size.height);
+            if (is_macOS && macPlayerLayout) {
+                [self mdzSyncMacVisualizerFrames];
+                [self mdzSyncMacCommandChrome];
+            }
+            MDZLayoutCoverArt(cover_view, gifAnimation, cover_viewAll.bounds, is_macOS);
             
             
-            if (bShowEQ) eqVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
-            if (bShowVC) voicesVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
+            if (bShowEQ && eqVC && !macBottomRow) eqVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
+            if (bShowVC && voicesVC && !macBottomRow) voicesVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
             
             if (infoIsFullscreen) infoView.frame = CGRectMake(0, 0, m_oglView.frame.size.width, m_oglView.frame.size.height+m_oglView.frame.origin.y);
             else infoView.frame = m_oglView.frame;//CGRectMake(mainView.frame.origin.x, 80, mainView.frame.size.width, mDevice_hh-230-safe_bottom);
             
-            //commandViewU.frame = CGRectMake(2, 48, mDevice_ww-4, 32);
-            commandViewU.frame = CGRectMake(0, 0, mDevice_ww-safe_left-safe_right, 32+48);
+            if (!(is_macOS && macPlayerLayout)) {
+            CGFloat btnY = chromeTop - btnSide - 4.0;
+            commandViewU.frame = CGRectMake(0, 0, contentW, chromeTop);
             
-            buttonLoopTitleSel.frame = CGRectMake(10,0+48,32,32);
-            buttonLoopList.frame = CGRectMake(10,0+48,32,32);
-            buttonLoopListSel.frame = CGRectMake(10,0+48,32,32);
-            buttonShuffle.frame = CGRectMake(50,0+48,32,32);
-            buttonShuffleSel.frame = CGRectMake(50,0+48,32,32);
-            buttonShuffleOneSel.frame = CGRectMake(50,0+48,32,32);
+            buttonLoopTitleSel.frame = CGRectMake(10,btnY,btnSide,btnSide);
+            buttonLoopList.frame = CGRectMake(10,btnY,btnSide,btnSide);
+            buttonLoopListSel.frame = CGRectMake(10,btnY,btnSide,btnSide);
+            buttonShuffle.frame = CGRectMake(10+btnStep,btnY,btnSide,btnSide);
+            buttonShuffleSel.frame = CGRectMake(10+btnStep,btnY,btnSide,btnSide);
+            buttonShuffleOneSel.frame = CGRectMake(10+btnStep,btnY,btnSide,btnSide);
             
-            btnLoopInf.frame = CGRectMake(88,48+3,28,28);
+            btnLoopInf.frame = CGRectMake(10+btnStep*2,btnY+(btnSide-28)/2.0,28,28);
             
-            btnShowSubSong.frame = CGRectMake(mDevice_ww-safe_left-safe_right-36,0+48,32,32);
-            btnShowArcList.frame = CGRectMake(mDevice_ww-safe_left-safe_right-36*2,0+48,32,32);
-            btnShowVoices.frame =  CGRectMake(mDevice_ww-safe_left-safe_right-36*3,0+48,32,32);
-            btnRecordScreen.frame =CGRectMake(mDevice_ww-safe_left-safe_right-36*4,0+48,32,32);
-            btnAddToPl.frame =     CGRectMake(mDevice_ww-safe_left-safe_right-36*5,0+48,32,32);
-            btnSaveFile.frame =    CGRectMake(mDevice_ww-safe_left-safe_right-36*5,0+48,32,32);
-            btnRadioPrevList.frame =    CGRectMake(mDevice_ww-safe_left-safe_right-36*6,0+48,32,32);
+            if (!is_macOS) {
+                btnShowSubSong.frame = CGRectMake(contentW-btnStep,btnY,btnSide,btnSide);
+                btnShowArcList.frame = CGRectMake(contentW-btnStep*2,btnY,btnSide,btnSide);
+                btnShowVoices.frame =  CGRectMake(contentW-btnStep*3,btnY,btnSide,btnSide);
+            }
+            btnRecordScreen.frame =CGRectMake(contentW-btnStep*(is_macOS?1:4),btnY,btnSide,btnSide);
+            btnAddToPl.frame =     CGRectMake(contentW-btnStep*(is_macOS?2:5),btnY,btnSide,btnSide);
+            btnSaveFile.frame =    CGRectMake(contentW-btnStep*(is_macOS?2:5),btnY,btnSide,btnSide);
+            btnRadioPrevList.frame =    CGRectMake(contentW-btnStep*(is_macOS?3:6),btnY,btnSide,btnSide);
 
 
-            mainRating5.frame = CGRectMake(130+2,3+48+4,20,20);
-            mainRating5off.frame = CGRectMake(130+2,3+48+4,20,20);
+            mainRating5.frame = CGRectMake(10+btnStep*2+34,btnY+(btnSide-24)/2.0,24,24);
+            mainRating5off.frame = CGRectMake(10+btnStep*2+34,btnY+(btnSide-24)/2.0,24,24);
             
             
             if ([radioSource isActive]) {
@@ -5135,14 +5247,17 @@ int recording=0;
                 [self showRating:[self getCurrentRating]];
             }
             
-            infoButton.frame = CGRectMake(mDevice_ww-safe_left-safe_right-40,4,36,36);
-            eqButton.frame = CGRectMake(mDevice_ww-safe_left-safe_right-40-40,4,36,36);
+            infoButton.frame = CGRectMake(contentW-infoSide-4,4,infoSide,infoSide);
+            if (!is_macOS) {
+                eqButton.frame = CGRectMake(contentW-infoSide-4-infoSide-4,4,infoSide,infoSide);
+            }
             
-            playlistPos.frame = CGRectMake((mDevice_ww-safe_left-safe_right)/2-90-20,0,180,20);
+            playlistPos.frame = CGRectMake(contentW/2-90-20,0,180,20);
             labelModuleLength.frame=CGRectMake(2,0,45,20);
             labelTime.frame=CGRectMake(2,24,45,20);
             btnChangeTime.frame=CGRectMake(2,24,45,20);
-            sliderProgressModule.frame = CGRectMake(48,23-6,mDevice_ww-safe_left-safe_right-48-40-40-4,23);
+            sliderProgressModule.frame = CGRectMake(48,23-6,contentW-48-(is_macOS?infoSide:infoSide*2)-12, is_macOS ? 28 : 23);
+            }
         }
     } else{
         //        waitingView.transform=CGAffineTransformMakeRotation(interfaceOrientation==UIInterfaceOrientationLandscapeLeft?-M_PI_2:M_PI_2);
@@ -5159,11 +5274,7 @@ int recording=0;
             m_oglView.frame = CGRectMake(0.0, 0.0, mDevice_hh, mDevice_ww);  //ipad
             //cover_viewBG.frame = CGRectMake(0.0, 0, mDevice_hh, mDevice_ww);//-82+82-safe_bottom-yofs);
             cover_viewAll.frame = m_oglView.frame;//CGRectMake(0.0, 0, mDevice_hh, mDevice_ww);//-82+82-safe_bottom-yofs);
-            
-            cover_view.frame = CGRectMake(cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height/20,
-                                          cover_viewAll.frame.size.width-2*cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height-2*cover_viewAll.frame.size.height/20);
+            MDZLayoutCoverArt(cover_view, gifAnimation, cover_viewAll.bounds, NO);
             
             if (bShowRadio) { radioView.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y+safe_top,mainView.frame.size.width,UI_RADIO_INFO_HEIGHT);
                 radioTitle.frame=CGRectMake(2,2,radioView.frame.size.width-2,14);
@@ -5237,16 +5348,10 @@ int recording=0;
             }
             
             cover_viewAll.frame = m_oglView.frame;//CGRectMake(0.0, 0, mDevice_hh, mDevice_ww-82+82-safe_bottom-yofs);
-            cover_view.frame = CGRectMake(cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height/20,
-                                          cover_viewAll.frame.size.width-2*cover_viewAll.frame.size.width/20,
-                                          cover_viewAll.frame.size.height-2*cover_viewAll.frame.size.height/20);
-            if (gifAnimation) {
-                gifAnimation.frame = CGRectMake(0, 0,cover_view.frame.size.width,cover_view.frame.size.height);
-            }
+            MDZLayoutCoverArt(cover_view, gifAnimation, cover_viewAll.bounds, is_macOS);
             
-            if (bShowEQ) eqVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
-            if (bShowVC) voicesVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
+            if (bShowEQ && eqVC && !macBottomRow) eqVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
+            if (bShowVC && voicesVC && !macBottomRow) voicesVC.view.frame=CGRectMake(mainView.frame.origin.x,m_oglView.frame.origin.y,mainView.frame.size.width,m_oglView.frame.size.height);
             
             if (infoIsFullscreen) infoView.frame = CGRectMake(0, 0, m_oglView.frame.size.width, m_oglView.frame.size.height+m_oglView.frame.origin.y);
             else infoView.frame = m_oglView.frame;// CGRectMake(mainView.frame.origin.x, 82, mainView.frame.size.width, mDevice_ww-82-30-0*safe_bottom);
@@ -5307,36 +5412,488 @@ int recording=0;
 }
 
 
+static void MDZHideNamedCloseButtons(UIView *view) {
+    if (!view) {
+        return;
+    }
+    for (UIView *sub in view.subviews) {
+        if ([sub isKindOfClass:[UIButton class]]) {
+            UIButton *btn = (UIButton *)sub;
+            UIImage *img = [btn imageForState:UIControlStateNormal];
+            if (img == [UIImage imageNamed:@"close.png"]) {
+                btn.hidden = YES;
+            }
+            for (id target in [btn allTargets]) {
+                NSArray *selNames = [btn actionsForTarget:target forControlEvent:UIControlEventTouchUpInside];
+                if ([selNames containsObject:@"closeView"]) {
+                    btn.hidden = YES;
+                }
+            }
+        }
+        MDZHideNamedCloseButtons(sub);
+    }
+}
+
+static void MDZApplySquareTransportStyle(UIButton *btn, UIImage *image) {
+    if (!btn) {
+        return;
+    }
+    if (@available(iOS 15.0, *)) {
+        UIButtonConfiguration *cfg = [UIButtonConfiguration filledButtonConfiguration];
+        cfg.baseForegroundColor = [UIColor whiteColor];
+        cfg.baseBackgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
+        cfg.cornerStyle = UIButtonConfigurationCornerStyleFixed;
+        cfg.background.cornerRadius = 8.0;
+        cfg.image = image;
+        cfg.contentInsets = NSDirectionalEdgeInsetsMake(0, 0, 0, 0);
+        btn.configuration = cfg;
+    } else {
+        btn.tintColor = [UIColor whiteColor];
+        btn.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
+        [btn setImage:image forState:UIControlStateNormal];
+    }
+    btn.layer.cornerRadius = 8.0;
+    btn.layer.cornerCurve = kCACornerCurveContinuous;
+    btn.clipsToBounds = YES;
+}
+
+-(void)mdzInstallMacPlayerLayoutIfNeeded {
+    if (!is_macOS || !mainView || macPlayerLayout) {
+        return;
+    }
+    macPlayerLayout = [MacPlayerLayout loadFromNib];
+    if (!macPlayerLayout) {
+        return;
+    }
+    [mainView addSubview:macPlayerLayout];
+    [macPlayerLayout prepareForRuntime];
+    self.macBottomRow = macPlayerLayout.bottomRow;
+    [self mdzBindMacTransportActions];
+}
+
+-(void)mdzSyncMacVisualizerFrames {
+    if (!macPlayerLayout || !macPlayerLayout.visualizerContainer) {
+        return;
+    }
+    UIView *host = macPlayerLayout.visualizerContainer;
+    if (m_oglView.superview != host) {
+        [host addSubview:m_oglView];
+        if (cover_viewAll) {
+            [host addSubview:cover_viewAll];
+        }
+        if (oglButton) {
+            [host addSubview:oglButton];
+        }
+        m_oglView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        cover_viewAll.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        oglButton.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    }
+    CGRect bounds = host.bounds;
+    m_oglView.frame = bounds;
+    cover_viewAll.frame = bounds;
+    oglButton.frame = bounds;
+    [host bringSubviewToFront:cover_viewAll];
+    [host bringSubviewToFront:oglButton];
+}
+
+static void MDZMoveViewToHost(UIView *view, UIView *host) {
+    if (!view || !host) {
+        return;
+    }
+    if (view.superview != host) {
+        [host addSubview:view];
+    }
+}
+
+static void MDZStyleMacAccessoryButton(UIButton *btn) {
+    if (!btn) {
+        return;
+    }
+    UIColor *fill = [UIColor colorWithWhite:1.0 alpha:0.10];
+    UIColor *fg = [UIColor colorWithWhite:1.0 alpha:0.92];
+    if ([btn isKindOfClass:[BButton class]]) {
+        BButton *bb = (BButton *)btn;
+        [bb setStyle:BButtonStyleBootstrapV3];
+        [bb setColor:fill];
+        bb.buttonCornerRadius = @10;
+        [bb setTitleColor:fg forState:UIControlStateNormal];
+        bb.tintColor = fg;
+        return;
+    }
+    if (@available(iOS 15.0, *)) {
+        btn.configuration = nil;
+    }
+    btn.backgroundColor = fill;
+    btn.layer.cornerRadius = 10.0;
+    btn.clipsToBounds = YES;
+    btn.tintColor = fg;
+    btn.adjustsImageWhenHighlighted = YES;
+    btn.contentEdgeInsets = UIEdgeInsetsMake(7, 7, 7, 7);
+    if (btn.imageView) {
+        btn.imageView.contentMode = UIViewContentModeScaleAspectFit;
+    }
+}
+
+static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
+    for (id obj in buttons) {
+        if (![obj isKindOfClass:[UIButton class]]) {
+            continue;
+        }
+        UIButton *btn = obj;
+        btn.frame = frame;
+        MDZStyleMacAccessoryButton(btn);
+    }
+}
+
+-(NSString *)mdzMacNowPlayingMeta {
+    if (!mplayer || mPlaylist_size < 1) {
+        return @"";
+    }
+    NSMutableString *text = [NSMutableString stringWithFormat:@"%d of %d", mPlaylist_pos + 1, mPlaylist_size];
+    int arcCnt = [mplayer getArcEntriesCnt];
+    if (arcCnt > 1) {
+        [text appendFormat:@"  ·  Archive %d of %d", [mplayer getArcIndex] + 1, arcCnt];
+    }
+    if (mplayer.mod_subsongs > 1) {
+        [text appendFormat:@"  ·  Sub %d of %d", mplayer.mod_currentsub - mplayer.mod_minsub + 1, mplayer.mod_subsongs];
+    }
+    return text;
+}
+
+-(void)mdzSyncMacCommandChrome {
+    MacPlayerLayout *lay = macPlayerLayout;
+    if (!lay) {
+        return;
+    }
+    UIView *left = lay.commandLeftHost;
+    UIView *title = lay.commandTitleHost;
+    UIView *right = lay.commandRightHost;
+    UIView *progress = lay.progressBar;
+    UIView *transport = lay.transportBar;
+    if (!left || !title || !right || !progress) {
+        return;
+    }
+
+    if (labelSeeking) {
+        labelSeeking.hidden = YES;
+    }
+
+    if (transport) {
+        transport.clipsToBounds = NO;
+        if (left.superview != transport) {
+            [transport addSubview:left];
+        }
+        if (right.superview != transport) {
+            [transport addSubview:right];
+        }
+        CGFloat barW = CGRectGetWidth(transport.bounds);
+        CGFloat barH = CGRectGetHeight(transport.bounds);
+        CGFloat accSide = 36.0;
+        CGFloat accGap = 8.0;
+        CGFloat pad = 24.0;
+        BOOL radio = [radioSource isActive];
+        NSInteger leftN = 4;
+        NSInteger rightN = radio ? 4 : 3;
+        CGFloat leftW = accSide * leftN + accGap * (leftN - 1);
+        CGFloat rightW = accSide * rightN + accGap * (rightN - 1);
+        left.backgroundColor = [UIColor clearColor];
+        right.backgroundColor = [UIColor clearColor];
+        left.clipsToBounds = NO;
+        right.clipsToBounds = NO;
+        left.frame = CGRectMake(pad, MAX(0.0, (barH - accSide) / 2.0), leftW, accSide);
+        right.frame = CGRectMake(barW - pad - rightW, MAX(0.0, (barH - accSide) / 2.0), rightW, accSide);
+    }
+
+    NSArray *leftViews = @[
+        buttonLoopTitleSel, buttonLoopList, buttonLoopListSel,
+        buttonShuffle, buttonShuffleSel, buttonShuffleOneSel,
+        btnLoopInf, mainRating5, mainRating5off
+    ];
+    for (UIView *view in leftViews) {
+        MDZMoveViewToHost(view, left);
+    }
+    CGFloat side = CGRectGetHeight(left.bounds);
+    if (side < 8.0) {
+        side = 36.0;
+    }
+    CGFloat gap = 8.0;
+    CGFloat x = 0;
+    MDZPlaceMacAccessorySlot(@[buttonLoopTitleSel, buttonLoopList, buttonLoopListSel],
+                             CGRectMake(x, 0, side, side));
+    x += side + gap;
+    MDZPlaceMacAccessorySlot(@[buttonShuffle, buttonShuffleSel, buttonShuffleOneSel],
+                             CGRectMake(x, 0, side, side));
+    x += side + gap;
+    MDZPlaceMacAccessorySlot(@[btnLoopInf], CGRectMake(x, 0, side, side));
+    x += side + gap;
+    MDZPlaceMacAccessorySlot(@[mainRating5, mainRating5off], CGRectMake(x, 0, side, side));
+
+    MDZMoveViewToHost(labelContainer, title);
+    MDZMoveViewToHost(playlistPos, title);
+    title.backgroundColor = [UIColor clearColor];
+    CGFloat titleW = CGRectGetWidth(title.bounds);
+    CGFloat titleH = CGRectGetHeight(title.bounds);
+    BOOL hasArtist = (labelArtist.text.length > 0);
+    CGFloat nameH = 22.0;
+    CGFloat artistH = hasArtist ? 16.0 : 0.0;
+    CGFloat metaH = 16.0;
+    CGFloat stackH = nameH + artistH + metaH;
+    CGFloat y0 = MAX(4.0, (titleH - stackH) / 2.0);
+    labelContainer.frame = CGRectMake(0, y0, titleW, nameH + artistH);
+    labelModuleName.frame = CGRectMake(0, 0, titleW, nameH);
+    labelArtist.frame = CGRectMake(0, nameH, titleW, artistH);
+    labelModuleName.textAlignment = NSTextAlignmentCenter;
+    labelArtist.textAlignment = NSTextAlignmentCenter;
+    labelModuleName.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightSemibold];
+    labelArtist.font = [UIFont systemFontOfSize:12.0 weight:UIFontWeightRegular];
+    labelArtist.textColor = [UIColor colorWithWhite:1.0 alpha:0.62];
+    playlistPos.hidden = NO;
+    playlistPos.frame = CGRectMake(0, y0 + nameH + artistH, titleW, metaH);
+    playlistPos.textAlignment = NSTextAlignmentCenter;
+    playlistPos.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightRegular];
+    playlistPos.textColor = [UIColor colorWithWhite:1.0 alpha:0.48];
+    playlistPos.shadowColor = nil;
+    playlistPos.shadowOffset = CGSizeZero;
+    playlistPos.adjustsFontSizeToFitWidth = YES;
+    playlistPos.minimumScaleFactor = 0.75;
+    if (!playlistPos.text.length) {
+        playlistPos.text = [self mdzMacNowPlayingMeta];
+    }
+
+    NSArray *rightViews = @[btnAddToPl, btnSaveFile, btnRadioPrevList, btnRecordScreen, infoButton];
+    for (UIView *view in rightViews) {
+        MDZMoveViewToHost(view, right);
+    }
+    if ([radioSource isActive]) {
+        btnSaveFile.hidden = NO;
+        btnRadioPrevList.hidden = NO;
+        btnAddToPl.hidden = YES;
+        mainRating5.hidden = YES;
+        mainRating5off.hidden = YES;
+        x = 0;
+        MDZPlaceMacAccessorySlot(@[btnSaveFile], CGRectMake(x, 0, side, side));
+        x += side + gap;
+        MDZPlaceMacAccessorySlot(@[btnRadioPrevList], CGRectMake(x, 0, side, side));
+        x += side + gap;
+        MDZPlaceMacAccessorySlot(@[btnRecordScreen], CGRectMake(x, 0, side, side));
+        x += side + gap;
+        MDZPlaceMacAccessorySlot(@[infoButton], CGRectMake(x, 0, side, side));
+    } else {
+        btnSaveFile.hidden = YES;
+        btnRadioPrevList.hidden = YES;
+        btnAddToPl.hidden = NO;
+        [self showRating:[self getCurrentRating]];
+        x = 0;
+        MDZPlaceMacAccessorySlot(@[btnAddToPl], CGRectMake(x, 0, side, side));
+        x += side + gap;
+        MDZPlaceMacAccessorySlot(@[btnRecordScreen], CGRectMake(x, 0, side, side));
+        x += side + gap;
+        MDZPlaceMacAccessorySlot(@[infoButton], CGRectMake(x, 0, side, side));
+    }
+
+    MDZMoveViewToHost(labelTime, progress);
+    MDZMoveViewToHost(labelModuleLength, progress);
+    MDZMoveViewToHost(btnChangeTime, progress);
+    MDZMoveViewToHost(sliderProgressModule, progress);
+    CGFloat progW = CGRectGetWidth(progress.bounds);
+    CGFloat progH = CGRectGetHeight(progress.bounds);
+    CGFloat timeW = 48.0;
+    CGFloat sliderH = MIN(28.0, MAX(18.0, progH - 8.0));
+    CGFloat py = MAX(0.0, (progH - 20.0) / 2.0);
+    labelTime.frame = CGRectMake(8, py, timeW, 20);
+    btnChangeTime.frame = labelTime.frame;
+    labelModuleLength.frame = CGRectMake(progW - timeW - 8, py, timeW, 20);
+    sliderProgressModule.frame = CGRectMake(8 + timeW + 8, MAX(0.0, (progH - sliderH) / 2.0), MAX(40.0, progW - timeW * 2.0 - 32.0), sliderH);
+    labelTime.textAlignment = NSTextAlignmentCenter;
+    labelModuleLength.textAlignment = NSTextAlignmentCenter;
+    labelTime.font = [UIFont monospacedDigitSystemFontOfSize:12.0 weight:UIFontWeightRegular];
+    labelModuleLength.font = [UIFont monospacedDigitSystemFontOfSize:12.0 weight:UIFontWeightRegular];
+    labelTime.textColor = [UIColor colorWithWhite:1.0 alpha:0.72];
+    labelModuleLength.textColor = [UIColor colorWithWhite:1.0 alpha:0.72];
+}
+
+-(void)mdzBindMacTransportActions {
+    MacPlayerLayout *lay = macPlayerLayout;
+    if (!lay) {
+        return;
+    }
+    [lay.prevButton removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
+    [lay.rewindButton removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
+    [lay.playButton removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
+    [lay.forwardButton removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
+    [lay.nextButton removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
+    [lay.prevButton addTarget:self action:@selector(playPrev) forControlEvents:UIControlEventTouchUpInside];
+    [lay.rewindButton addTarget:self action:@selector(playPrevSub) forControlEvents:UIControlEventTouchUpInside];
+    [lay.forwardButton addTarget:self action:@selector(playNextSub) forControlEvents:UIControlEventTouchUpInside];
+    [lay.nextButton addTarget:self action:@selector(playNext) forControlEvents:UIControlEventTouchUpInside];
+    if (mPaused) {
+        [lay.playButton addTarget:self action:@selector(playPushed) forControlEvents:UIControlEventTouchUpInside];
+    } else {
+        [lay.playButton addTarget:self action:@selector(pausePushed) forControlEvents:UIControlEventTouchUpInside];
+    }
+}
+
+-(void)mdzLayoutMacTransportBar {
+    if (!is_macOS || !mainView) {
+        return;
+    }
+    [self mdzInstallMacPlayerLayoutIfNeeded];
+    playBar.hidden = YES;
+    pauseBar.hidden = YES;
+    playBarSub.hidden = YES;
+    pauseBarSub.hidden = YES;
+    playBar.alpha = 0;
+    pauseBar.alpha = 0;
+    playBarSub.alpha = 0;
+    pauseBarSub.alpha = 0;
+    if (!macPlayerLayout) {
+        return;
+    }
+    [macPlayerLayout styleTransportButtonsPlaying:!mPaused];
+    [self mdzBindMacTransportActions];
+}
+
+- (void)mdzRefreshMacBottomPanels {
+    if (!is_macOS) {
+        return;
+    }
+    [self mdzLayoutMacActionRow];
+    if (voicesVC) {
+        [voicesVC resetVoicesButtons];
+        voicesVC.scrollView.frame = voicesVC.view.bounds;
+        [voicesVC recomputeFrames];
+    }
+    if (macSubsongTable) {
+        [macSubsongTable reloadData];
+    }
+    if (macPlayerLayout) {
+        [macPlayerLayout syncEqualizerFromEngine];
+    }
+}
+
+-(void)mdzLayoutMacActionRow {
+    if (!is_macOS || !mainView) {
+        return;
+    }
+    [self mdzInstallMacPlayerLayoutIfNeeded];
+    if (!macPlayerLayout) {
+        return;
+    }
+    self.macBottomRow = macPlayerLayout.bottomRow;
+    btnShowSubSong.hidden = YES;
+    btnShowVoices.hidden = YES;
+    eqButton.hidden = YES;
+
+    UIView *subBody = macPlayerLayout.subsongBody;
+    UIView *voicesBody = macPlayerLayout.voicesBody;
+    UIView *eqBody = macPlayerLayout.eqBody;
+    CGRect subFrame = subBody.bounds;
+    CGRect voicesFrame = voicesBody.bounds;
+    CGRect eqFrame = eqBody.bounds;
+
+    if (macPlayerLayout.subsongTable) {
+        macSubsongTable = macPlayerLayout.subsongTable;
+    } else if (!macSubsongTable) {
+        macSubsongTable = [[UITableView alloc] initWithFrame:subFrame style:UITableViewStylePlain];
+        macSubsongTable.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [subBody addSubview:macSubsongTable];
+    }
+    macSubsongTable.delegate = self;
+    macSubsongTable.dataSource = self;
+    macSubsongTable.rowHeight = 28.0;
+    macSubsongTable.sectionHeaderHeight = 0;
+    macSubsongTable.backgroundColor = [UIColor clearColor];
+    macSubsongTable.separatorColor = [UIColor colorWithWhite:1.0 alpha:0.12];
+    macSubsongTable.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
+    if (macSubsongTable != subBody) {
+        macSubsongTable.frame = subFrame;
+    }
+
+    if (!voicesVC) {
+        voicesVC = [[VoicesViewController alloc] initWithNibName:@"VoicesViewController" bundle:[NSBundle mainBundle]];
+        voicesVC.detailViewController = self;
+        [self addChildViewController:voicesVC];
+        [voicesVC didMoveToParentViewController:self];
+    }
+    if (voicesVC.view.superview != voicesBody) {
+        [voicesVC.view removeFromSuperview];
+        [voicesBody addSubview:voicesVC.view];
+        MDZHideNamedCloseButtons(voicesVC.view);
+        voicesVC.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    }
+    voicesVC.view.frame = voicesFrame;
+    voicesVC.view.backgroundColor = [UIColor clearColor];
+    if (voicesVC.scrollView) {
+        voicesVC.scrollView.frame = voicesVC.view.bounds;
+    }
+    BOOL hasVoices = (mplayer && [mplayer isVoicesMutingSupported] && mplayer.numChannels > 0);
+    if (hasVoices && ![voicesVC hasVoiceButtons]) {
+        [voicesVC resetVoicesButtons];
+    }
+    [voicesVC recomputeFrames];
+    macPlayerLayout.voicesEmptyLabel.text = hasVoices ? @"" : NSLocalizedString(@"No voices", @"");
+    macPlayerLayout.voicesEmptyLabel.hidden = hasVoices;
+    voicesVC.view.hidden = !hasVoices;
+
+    if (macPlayerLayout.eqApplySwitch) {
+        if (eqVC && eqVC.view.superview == eqBody) {
+            [eqVC.view removeFromSuperview];
+        }
+        [macPlayerLayout syncEqualizerFromEngine];
+    } else {
+        if (!eqVC) {
+            eqVC = [[EQViewController alloc] initWithNibName:@"EQViewController" bundle:[NSBundle mainBundle]];
+            eqVC.detailViewController = self;
+            [self addChildViewController:eqVC];
+            [eqVC didMoveToParentViewController:self];
+        }
+        if (eqVC.view.superview != eqBody) {
+            [eqVC.view removeFromSuperview];
+            [eqBody addSubview:eqVC.view];
+            MDZHideNamedCloseButtons(eqVC.view);
+            eqVC.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        }
+        eqVC.view.frame = eqFrame;
+        eqVC.view.backgroundColor = [UIColor clearColor];
+        eqVC.view.clipsToBounds = YES;
+        [eqVC recomputeFrames];
+    }
+
+    [mainView bringSubviewToFront:macPlayerLayout];
+}
+
 -(void)updateBarPos {
+    CGFloat barH = is_macOS ? MDZ_MAC_PLAY_BAR_HEIGHT : 44.0;
     if ((orientationHV==UIInterfaceOrientationPortrait)||(orientationHV==UIInterfaceOrientationPortraitUpsideDown)) {
         float y_ofs;
         if (is_macOS||is_iPad) {
             
             y_ofs=m_oglView.frame.origin.y+m_oglView.frame.size.height;
             
-            playBar.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, 44);
-            pauseBar.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, 44);
-            playBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, 44);
-            pauseBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, 44);
+            playBar.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, barH);
+            pauseBar.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, barH);
+            playBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, barH);
+            pauseBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww-safe_left-safe_right, barH);
         } else {
             y_ofs=m_oglView.frame.origin.y+m_oglView.frame.size.height;
             
-            playBar.frame = CGRectMake(0, y_ofs, mDevice_ww, 44);
-            pauseBar.frame = CGRectMake(0, y_ofs, mDevice_ww, 44);
-            playBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww, 44);
-            pauseBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww, 44);
+            playBar.frame = CGRectMake(0, y_ofs, mDevice_ww, barH);
+            pauseBar.frame = CGRectMake(0, y_ofs, mDevice_ww, barH);
+            playBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww, barH);
+            pauseBarSub.frame = CGRectMake(0, y_ofs, mDevice_ww, barH);
             
         }
     } else {
         int xofs=24*5+36*3+10;
         float y_ofs=40;
         
-        playBar.frame = CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, 44); //mDevice_hh-(playBar.hidden?0:375)
-        pauseBar.frame = CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, 44);
-        playBarSub.frame =  CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, 44);
-        pauseBarSub.frame =  CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, 44);
+        playBar.frame = CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, barH); //mDevice_hh-(playBar.hidden?0:375)
+        pauseBar.frame = CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, barH);
+        playBarSub.frame =  CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, barH);
+        pauseBarSub.frame =  CGRectMake(0, y_ofs, mDevice_hh-xofs-safe_left-safe_right, barH);
     }
-    
+    [self mdzLayoutMacTransportBar];
+    [self mdzLayoutMacActionRow];
 }
 
 
@@ -5874,6 +6431,7 @@ bool coverAvailable;
     if (self.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark) darkMode=true;
     if (oldmode!=darkMode) forceReloadCells=true;
     if (alertTableView) [alertTableView reloadData];
+    if (macSubsongTable) [macSubsongTable reloadData];
 }
 -(void) presentContextOGL {
     MGLLayer *oglLayer = (MGLLayer *)m_oglView.layer;
@@ -6175,11 +6733,25 @@ void pm_perfTest() {
     modPatternLineSize	=0;
 }
 
+- (UIButton *)mdzSquareTransportButtonWithImage:(UIImage *)image action:(SEL)action {
+    UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
+    CGFloat side = MDZ_MAC_TRANSPORT_SIDE;
+    btn.frame = CGRectMake(0, 0, side, side);
+    btn.tintColor = [UIColor whiteColor];
+    btn.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.10];
+    btn.layer.cornerRadius = 6.0;
+    btn.clipsToBounds = YES;
+    btn.adjustsImageWhenHighlighted = YES;
+    [btn setImage:image forState:UIControlStateNormal];
+    [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    return btn;
+}
+
 - (void) buildCommandBar:(UIToolbar *)bar isPause:(bool)isPause isSub:(bool)isSub {
     
     // When creating your bar button items with SF Symbols:
-    UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:22.0
-                                                                                         weight:UIImageSymbolWeightThin
+    UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:(is_macOS ? 26.0 : 22.0)
+                                                                                         weight:is_macOS ? UIImageSymbolWeightRegular : UIImageSymbolWeightThin
                                                                                           scale:UIImageSymbolScaleLarge];
     
     
@@ -6194,32 +6766,52 @@ void pm_perfTest() {
         nextSubImage = [UIImage systemImageNamed:@"forward.fill" withConfiguration:config];
         prevSubImage = [UIImage systemImageNamed:@"backward.fill" withConfiguration:config];
     }
-    
-    
-    UIBarButtonItem *itemPlayPause = [[UIBarButtonItem alloc] initWithImage:playPauseImage style:UIBarButtonItemStylePlain target:self action:(isPause?@selector(pausePushed):@selector(playPushed))];
-    
-    UIBarButtonItem *itemPrev = [[UIBarButtonItem alloc] initWithImage:prevImage style:UIBarButtonItemStylePlain target:self action:@selector(playPrev)];
-    
-    UIBarButtonItem *itemNext = [[UIBarButtonItem alloc] initWithImage:nextImage style:UIBarButtonItemStylePlain target:self action:@selector(playNext)];
-    
+
+    UIBarButtonItem *itemPlayPause;
+    UIBarButtonItem *itemPrev;
+    UIBarButtonItem *itemNext;
     UIBarButtonItem *itemPrevSub=nil;
     UIBarButtonItem *itemNextSub=nil;
-    if (isSub) {
-        itemPrevSub = [[UIBarButtonItem alloc] initWithImage:prevSubImage style:UIBarButtonItemStylePlain target:self action:@selector(playPrevSub)];
-        itemNextSub = [[UIBarButtonItem alloc] initWithImage:nextSubImage style:UIBarButtonItemStylePlain target:self action:@selector(playNextSub)];
-        
-        UILongPressGestureRecognizer *longPressPaPrevSGesture = [[UILongPressGestureRecognizer alloc]
-                                                                 initWithTarget:self
-                                                                 action:@selector(longPressPrevSubArc:)];
-        UILongPressGestureRecognizer *longPressPaNextSGesture = [[UILongPressGestureRecognizer alloc]
-                                                                 initWithTarget:self
-                                                                 action:@selector(longPressNextSubArc:)];
-        
-        if ([[itemPrevSub valueForKey:@"view"] respondsToSelector:@selector(addGestureRecognizer:)]) {
-            [[itemPrevSub valueForKey:@"view"] addGestureRecognizer:longPressPaPrevSGesture];
+    if (is_macOS) {
+        UIButton *playBtn = [self mdzSquareTransportButtonWithImage:playPauseImage action:(isPause?@selector(pausePushed):@selector(playPushed))];
+        UIButton *prevBtn = [self mdzSquareTransportButtonWithImage:prevImage action:@selector(playPrev)];
+        UIButton *nextBtn = [self mdzSquareTransportButtonWithImage:nextImage action:@selector(playNext)];
+        itemPlayPause = [[UIBarButtonItem alloc] initWithCustomView:playBtn];
+        itemPrev = [[UIBarButtonItem alloc] initWithCustomView:prevBtn];
+        itemNext = [[UIBarButtonItem alloc] initWithCustomView:nextBtn];
+        if (isSub) {
+            UIButton *prevSubBtn = [self mdzSquareTransportButtonWithImage:prevSubImage action:@selector(playPrevSub)];
+            UIButton *nextSubBtn = [self mdzSquareTransportButtonWithImage:nextSubImage action:@selector(playNextSub)];
+            UILongPressGestureRecognizer *longPressPaPrevSGesture = [[UILongPressGestureRecognizer alloc]
+                                                                     initWithTarget:self
+                                                                     action:@selector(longPressPrevSubArc:)];
+            UILongPressGestureRecognizer *longPressPaNextSGesture = [[UILongPressGestureRecognizer alloc]
+                                                                     initWithTarget:self
+                                                                     action:@selector(longPressNextSubArc:)];
+            [prevSubBtn addGestureRecognizer:longPressPaPrevSGesture];
+            [nextSubBtn addGestureRecognizer:longPressPaNextSGesture];
+            itemPrevSub = [[UIBarButtonItem alloc] initWithCustomView:prevSubBtn];
+            itemNextSub = [[UIBarButtonItem alloc] initWithCustomView:nextSubBtn];
         }
-        if ([[itemNextSub valueForKey:@"view"] respondsToSelector:@selector(addGestureRecognizer:)]) {
-            [[itemNextSub valueForKey:@"view"] addGestureRecognizer:longPressPaNextSGesture];
+    } else {
+        itemPlayPause = [[UIBarButtonItem alloc] initWithImage:playPauseImage style:UIBarButtonItemStylePlain target:self action:(isPause?@selector(pausePushed):@selector(playPushed))];
+        itemPrev = [[UIBarButtonItem alloc] initWithImage:prevImage style:UIBarButtonItemStylePlain target:self action:@selector(playPrev)];
+        itemNext = [[UIBarButtonItem alloc] initWithImage:nextImage style:UIBarButtonItemStylePlain target:self action:@selector(playNext)];
+        if (isSub) {
+            itemPrevSub = [[UIBarButtonItem alloc] initWithImage:prevSubImage style:UIBarButtonItemStylePlain target:self action:@selector(playPrevSub)];
+            itemNextSub = [[UIBarButtonItem alloc] initWithImage:nextSubImage style:UIBarButtonItemStylePlain target:self action:@selector(playNextSub)];
+            UILongPressGestureRecognizer *longPressPaPrevSGesture = [[UILongPressGestureRecognizer alloc]
+                                                                     initWithTarget:self
+                                                                     action:@selector(longPressPrevSubArc:)];
+            UILongPressGestureRecognizer *longPressPaNextSGesture = [[UILongPressGestureRecognizer alloc]
+                                                                     initWithTarget:self
+                                                                     action:@selector(longPressNextSubArc:)];
+            if ([[itemPrevSub valueForKey:@"view"] respondsToSelector:@selector(addGestureRecognizer:)]) {
+                [[itemPrevSub valueForKey:@"view"] addGestureRecognizer:longPressPaPrevSGesture];
+            }
+            if ([[itemNextSub valueForKey:@"view"] respondsToSelector:@selector(addGestureRecognizer:)]) {
+                [[itemNextSub valueForKey:@"view"] addGestureRecognizer:longPressPaNextSGesture];
+            }
         }
     }
     
@@ -6260,6 +6852,55 @@ void pm_perfTest() {
     }
     //fallback
     return [UIApplication sharedApplication].windows.firstObject;
+}
+
+- (void)mdzApplyDesktopLayoutMetrics {
+    if (!is_macOS) {
+        return;
+    }
+    CGSize size = self.view.bounds.size;
+    if (size.width < 8 || size.height < 8) {
+        UIWindow *win = [self getWindow];
+        size = win.bounds.size;
+    }
+    mDevice_ww = size.width;
+    mDevice_hh = size.height;
+    orientationHV = UIInterfaceOrientationPortrait;
+}
+
+- (myTabBarController *)mdzTabBarController {
+    AppDelegate_Phone *app = (AppDelegate_Phone *)[[UIApplication sharedApplication] delegate];
+    if ([app.tabBarC isKindOfClass:[myTabBarController class]]) {
+        return app.tabBarC;
+    }
+    UIWindow *window = self.view.window ?: [self getWindow];
+    UIViewController *root = window.rootViewController;
+    if ([root isKindOfClass:[myTabBarController class]]) {
+        return (myTabBarController *)root;
+    }
+    if ([root isKindOfClass:[UISplitViewController class]]) {
+        UISplitViewController *split = (UISplitViewController *)root;
+        UIViewController *secondary = nil;
+        if (@available(iOS 14.0, *)) {
+            secondary = [split viewControllerForColumn:UISplitViewControllerColumnSecondary];
+        }
+        if ([secondary isKindOfClass:[myTabBarController class]]) {
+            return (myTabBarController *)secondary;
+        }
+        UIViewController *primary = nil;
+        if (@available(iOS 14.0, *)) {
+            primary = [split viewControllerForColumn:UISplitViewControllerColumnPrimary];
+        }
+        if ([primary isKindOfClass:[myTabBarController class]]) {
+            return (myTabBarController *)primary;
+        }
+        for (UIViewController *child in split.viewControllers) {
+            if ([child isKindOfClass:[myTabBarController class]]) {
+                return (myTabBarController *)child;
+            }
+        }
+    }
+    return nil;
 }
 
 -(void) getScreenSize:(float*)scaleFactor width:(float *)devWW height:(float*)devHH {
@@ -6307,6 +6948,9 @@ void pm_perfTest() {
     if ([NSProcessInfo processInfo].isiOSAppOnMac) {
         is_macOS=true;
         mDeviceType=DEVICE_MACOS;
+    }
+    if (is_macOS) {
+        self.hidesBottomBarWhenPushed = NO;
     }
     
     
@@ -6362,6 +7006,9 @@ void pm_perfTest() {
         
         if (mScaleFactor>=2) mDeviceType=DEVICE_IPHONE_RETINA;
         
+    }
+    if (is_macOS) {
+        [self mdzApplyDesktopLayoutMetrics];
     }
     [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(orientationDidChange:) name:UIDeviceOrientationDidChangeNotification object:nil];
     
@@ -6526,8 +7173,12 @@ void pm_perfTest() {
     
     CHECK_PROFILE("various2b")
     
-    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"music.note.list"] style:UIBarButtonItemStylePlain target:self action:@selector(showPlaylist)];
-    self.navigationItem.rightBarButtonItem = item;
+    if (!is_macOS) {
+        UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"music.note.list"] style:UIBarButtonItemStylePlain target:self action:@selector(showPlaylist)];
+        self.navigationItem.rightBarButtonItem = item;
+    } else {
+        self.navigationItem.rightBarButtonItem = nil;
+    }
     
     mHasFocus=0;
     mShouldUpdateInfos=0;
@@ -6716,7 +7367,9 @@ void pm_perfTest() {
     [btnRadioPrevList addAwesomeIcon:FAIconHistory beforeTitle:YES];
     [btnAddToPl addAwesomeIcon:FAIconPlus beforeTitle:YES];
     
-    btnShowVoices.hidden=false;
+    if (!is_macOS) {
+        btnShowVoices.hidden=false;
+    }
     btnRecordScreen.hidden=false;
     btnRecordScreen.enabled=true;
     btnRecordScreen.selected=false;
@@ -6737,6 +7390,15 @@ void pm_perfTest() {
     [eqButton setType:BButtonTypeInverse];
     [eqButton setTitleColor:(nvdsp_EQ?[UIColor whiteColor]:[UIColor grayColor]) forState:UIControlStateNormal];
     [eqButton addAwesomeIcon:FAIconSliders beforeTitle:YES];
+    if (is_macOS) {
+        UIFont *faFont = [UIFont fontWithName:kFontAwesomeFont size:MDZ_MAC_SYMBOL_POINT_SIZE];
+        btnShowSubSong.titleLabel.font = faFont;
+        btnShowVoices.titleLabel.font = faFont;
+        eqButton.titleLabel.font = faFont;
+        [btnShowSubSong setTitle:[NSString fa_stringForFontAwesomeIcon:FAIconStackOverflow] forState:UIControlStateNormal];
+        [btnShowVoices setTitle:[NSString fa_stringForFontAwesomeIcon:FAIconMusic] forState:UIControlStateNormal];
+        [eqButton setTitle:[NSString fa_stringForFontAwesomeIcon:FAIconSliders] forState:UIControlStateNormal];
+    }
     
     CHECK_PROFILE("various7")
     
@@ -7038,6 +7700,9 @@ void pm_perfTest() {
     
     // Update device dimensions and orientation based on current view bounds
     // This ensures we always have the correct dimensions when layout is triggered
+    if (is_macOS) {
+        [self mdzApplyDesktopLayoutMetrics];
+    } else {
     CGSize viewSize = win.bounds.size;// self.view.bounds.size;
     if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
         if (viewSize.height>viewSize.width) {
@@ -7060,6 +7725,7 @@ void pm_perfTest() {
             mDevice_hh=viewSize.width;
             orientationHV=UIInterfaceOrientationLandscapeLeft;
         }
+    }
     }
     
     [self mdzUpdateUI:(UIInterfaceOrientation)orientationHV];
@@ -7101,7 +7767,11 @@ void pm_perfTest() {
     
     // Update device dimensions for both iPad AND iPhone
     // This was previously only updating for iPad, causing rotation issues on iPhone (especially iOS 15.5)
-    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+    if (is_macOS) {
+        mDevice_ww = size.width;
+        mDevice_hh = size.height;
+        orientationHV = UIInterfaceOrientationPortrait;
+    } else if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
         if (size.height>size.width) {
             mDevice_hh=size.height+(!deactivateFStemp && settings[GLOB_FXFullscreen].detail.mdz_boolswitch.switch_value?0:68);
             mDevice_ww=size.width;
@@ -7143,54 +7813,34 @@ void pm_perfTest() {
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    if (is_macOS) {
+        [self.navigationController setNavigationBarHidden:YES animated:NO];
+    }
     
     // Check if we're in sidebar mode
-    // Find TabBarController via window's root view controller
     BOOL isInSidebarMode = NO;
-    UIViewController *tabBarVC = nil;
+    myTabBarController *tabBarVC = [self mdzTabBarController];
     
-    // Get the window's root view controller
-    UIWindow *window = self.view.window;
-    if (window == nil) {
-        // Try to get the key window
-        for (UIScene* scene in UIApplication.sharedApplication.connectedScenes) {
-            if ([scene isKindOfClass:[UIWindowScene class]]) {
-                UIWindowScene *windowScene = (UIWindowScene *)scene;
-                for (UIWindow *w in windowScene.windows) {
-                    if (w.isKeyWindow) {
-                        window = w;
-                        break;
-                    }
-                }
-            }
-            if (window) break;
-        }
-    }
-    
-    tabBarVC = window.rootViewController;
-    
-    if (tabBarVC) {
-    }
-    
-    if (tabBarVC != nil && [tabBarVC isKindOfClass:[UITabBarController class]]) {
+    if (tabBarVC != nil) {
         if (@available(iOS 18.0, *)) {
             if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
-                tabBarVC.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassCompact;
+#if TARGET_OS_MACCATALYST
+                if (tabBarVC.catalystSplitViewController == nil)
+#endif
+                {
+                    tabBarVC.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassCompact;
+                }
             }
         }
-        // Check if we're in sidebar mode
         if ([tabBarVC respondsToSelector:@selector(catalystSplitViewController)]) {
             id splitVC = [tabBarVC performSelector:@selector(catalystSplitViewController)];
             if (splitVC != nil) {
                 isInSidebarMode = YES;
-                // Hide the mini-player when showing the full player
                 if ([tabBarVC respondsToSelector:@selector(hideSharedMiniPlayer)]) {
                     [tabBarVC performSelector:@selector(hideSharedMiniPlayer)];
                 }
-            } else {
             }
         }
-    } else {
     }
     
     // Only set delegate if NOT in sidebar mode
@@ -7238,6 +7888,9 @@ void pm_perfTest() {
         
         //if (mScaleFactor>=2) mDeviceType=2;
     }
+    if (is_macOS) {
+        [self mdzApplyDesktopLayoutMetrics];
+    }
     
     // Use self.view.safeAreaInsets for more reliable results, especially on iOS 15
     // where keyWindow may not have correct safe area insets at this point in the lifecycle
@@ -7255,6 +7908,7 @@ void pm_perfTest() {
     if (self.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark) darkMode=true;
     if (oldmode!=darkMode) forceReloadCells=true;
     if (alertTableView) [alertTableView reloadData];
+    if (macSubsongTable) [macSubsongTable reloadData];
     
     alertCannotPlay_displayed=0;
     //[[UIApplication sharedApplication] setStatusBarStyle:UIStatusBarStyleLightContent animated:YES];
@@ -7324,6 +7978,11 @@ void pm_perfTest() {
     } else {
         [self mdzUpdateUI:(UIInterfaceOrientation)orientationHV];
     }
+    if (is_macOS) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self mdzRefreshMacBottomPanels];
+        });
+    }
     
     self.previousAppearance = self.navigationController.navigationBar.standardAppearance;
     // Set black appearance
@@ -7365,13 +8024,20 @@ void pm_perfTest() {
     }
     
     //check if in radio mode or not
-    if ([radioSource isActive]) {
-        UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"dot.radiowaves.up.forward"] style:UIBarButtonItemStylePlain target:self action:@selector(showRadioPopup)];
-        self.navigationItem.rightBarButtonItem = item;
-        [self updRadioInfo];
+    if (!is_macOS) {
+        if ([radioSource isActive]) {
+            UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"dot.radiowaves.up.forward"] style:UIBarButtonItemStylePlain target:self action:@selector(showRadioPopup)];
+            self.navigationItem.rightBarButtonItem = item;
+            [self updRadioInfo];
+        } else {
+            UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"music.note.list"] style:UIBarButtonItemStylePlain target:self action:@selector(showPlaylist)];
+            self.navigationItem.rightBarButtonItem = item;
+        }
     } else {
-        UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"music.note.list"] style:UIBarButtonItemStylePlain target:self action:@selector(showPlaylist)];
-        self.navigationItem.rightBarButtonItem = item;
+        self.navigationItem.rightBarButtonItem = nil;
+        if ([radioSource isActive]) {
+            [self updRadioInfo];
+        }
     }
     if ([radioSource isActive]) {
         if ([radioSource isInLibrary:0]) [btnSaveFile setTitleColor:[UIColor grayColor] forState:UIControlStateNormal];
@@ -7439,40 +8105,22 @@ void pm_perfTest() {
     
     // Check if we're in sidebar mode
     BOOL isInSidebarMode = NO;
-    UIViewController *tabBarVC = nil;
-    
-    // Get window's root view controller
-    UIWindow *window = self.view.window;
-    if (window == nil) {
-        // Try to get the key window
-        for (UIScene* scene in UIApplication.sharedApplication.connectedScenes) {
-            if ([scene isKindOfClass:[UIWindowScene class]]) {
-                UIWindowScene *windowScene = (UIWindowScene *)scene;
-                for (UIWindow *w in windowScene.windows) {
-                    if (w.isKeyWindow) {
-                        window = w;
-                        break;
-                    }
-                }
-            }
-            if (window) break;
-        }
-    }
-    
-    tabBarVC = window.rootViewController;
-    if (tabBarVC != nil && [tabBarVC isKindOfClass:[UITabBarController class]]) {
+    myTabBarController *tabBarVC = [self mdzTabBarController];
+    if (tabBarVC != nil) {
         if (@available(iOS 18.0, *)) {
             if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
-                tabBarVC.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassRegular;
+#if TARGET_OS_MACCATALYST
+                if (tabBarVC.catalystSplitViewController == nil)
+#endif
+                {
+                    tabBarVC.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassRegular;
+                }
             }
         }
-        // Check if we're in sidebar mode
         if ([tabBarVC respondsToSelector:@selector(catalystSplitViewController)]) {
             id splitVC = [tabBarVC performSelector:@selector(catalystSplitViewController)];
             if (splitVC != nil) {
                 isInSidebarMode = YES;
-                // Don't show the mini-player here - let the appearing view controller handle it
-                // This prevents duplicate mini-players when navigating back
             }
         }
     }
@@ -10811,6 +11459,9 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
 #pragma mark - Table view data source
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+    if (macSubsongTable && tableView == macSubsongTable) {
+        return nil;
+    }
     UILabel *myLabel = [[UILabel alloc] init];
     NSString *lbl;
     switch (current_selmode) {
@@ -10839,6 +11490,10 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
     return 1;
 }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    if (macSubsongTable && tableView == macSubsongTable) {
+        int count = mplayer.mod_subsongs;
+        return count > 0 ? count : 1;
+    }
     switch (current_selmode) {
         case ARCSUB_MODE_ARC:
             return [mplayer getArcEntriesCnt];
@@ -10952,6 +11607,15 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
             topLabel.text=@"N/A";
             break;
     }
+    if (macSubsongTable && tabView == macSubsongTable) {
+        if (mplayer.mod_subsongs > 0) {
+            topLabel.text=[NSString stringWithFormat:@"%@",[mplayer getSubTitle:(int)(indexPath.row+mplayer.mod_minsub)]];
+        } else {
+            topLabel.text=NSLocalizedString(@"No subsong", @"");
+        }
+        topLabel.font = [UIFont systemFontOfSize:13 weight:MDZ_UIFONT_WEIGHT];
+        topLabel.frame = CGRectMake(8, 0, tabView.bounds.size.width - 16, 28);
+    }
     
     return cell;
 }
@@ -10982,6 +11646,14 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
 #pragma mark Table view delegate
 
 - (void)tableView:(UITableView *)tabView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (macSubsongTable && tabView == macSubsongTable) {
+        if (mplayer.mod_subsongs <= 0) {
+            return;
+        }
+        [self didSelectRowInAlertSubController:indexPath.row];
+        [macSubsongTable reloadData];
+        return;
+    }
     // Navigation logic may go here. Create and push another view controller.
     switch (current_selmode) {
         case ARCSUB_MODE_ARC:

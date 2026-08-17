@@ -25,6 +25,7 @@
 
 @class AnimatedLaunchVC;
 @class WelcomeVC;
+@class MacSidebarLayout;
 
 #if TARGET_OS_MACCATALYST
 @interface myTabBarController : UITabBarController <UINavigationControllerDelegate,UITabBarDelegate,UIPageViewControllerDataSource,UIPageViewControllerDelegate,NSToolbarDelegate,UICollectionViewDelegate,UISplitViewControllerDelegate,UIDropInteractionDelegate> {
@@ -54,6 +55,8 @@
 #if TARGET_OS_MACCATALYST
     UISplitViewController *catalystSplitViewController;
     UICollectionViewDiffableDataSource *sidebarDataSource;
+    UISegmentedControl *macSidebarSegment;
+    MacSidebarLayout *macSidebarLayout;
 #endif
 }
 @property (nonatomic, retain) NSArray *welcomePages;
@@ -78,9 +81,14 @@
 #if TARGET_OS_MACCATALYST
 @property (nonatomic, retain) UISplitViewController *catalystSplitViewController;
 @property (nonatomic, retain) UICollectionViewDiffableDataSource *sidebarDataSource;
+@property (nonatomic, retain) UISegmentedControl *macSidebarSegment;
+@property (nonatomic, retain) MacSidebarLayout *macSidebarLayout;
 #endif
 
 -(void) openURL:(NSURL *)url;
 -(void) presentWelcomePages;
+#if TARGET_OS_MACCATALYST
+-(BOOL)mdzShowPlayerOnDetailSide;
+#endif
 
 @end

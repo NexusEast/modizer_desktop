@@ -69,10 +69,203 @@ extern void *LoadingProgressObserverContext;
 #define mdz_safe_delete(x) if(x) {delete x;x=NULL;}
 #define mdz_safe_execute_sel(cont,sel,arg) if ([cont respondsToSelector:sel]) [cont performSelectorOnMainThread:sel withObject:arg waitUntilDone:NO];
 
-#define MODIZER_MACM1_WIDTH_MIN 340
+#define MODIZER_MACM1_WIDTH_MIN 900
 #define MODIZER_MACM1_WIDTH_MAX 10000 //1920*2
-#define MODIZER_MACM1_HEIGHT_MIN  342
+#define MODIZER_MACM1_HEIGHT_MIN  640
 #define MODIZER_MACM1_HEIGHT_MAX 10000 //1200*2
+#define MODIZER_MAC_WIDTH_DEFAULT 1280
+#define MODIZER_MAC_HEIGHT_DEFAULT 800
+
+#define MDZ_MAC_LIBRARY_COLUMN_WIDTH 420.0
+#define MDZ_MAC_LIBRARY_COLUMN_MIN 340.0
+#define MDZ_MAC_LIBRARY_COLUMN_MAX 560.0
+#define MDZ_MAC_COVER_MAX_SIDE 220.0
+#define MDZ_MAC_PLAY_BAR_HEIGHT 84.0
+#define MDZ_MAC_ACTION_ROW_HEIGHT 200.0
+#define MDZ_MAC_PANEL_GAP 8.0
+#define MDZ_MAC_TRANSPORT_SIDE 64.0
+#define MDZ_MAC_SIDEBAR_SEGMENT_HEIGHT 28.0
+#define MDZ_MAC_COMMAND_HEIGHT 64.0
+#define MDZ_MAC_BUTTON_SIDE 36.0
+#define MDZ_MAC_BUTTON_STEP 44.0
+#define MDZ_MAC_INFO_BUTTON_SIDE 36.0
+#define MDZ_MAC_SYMBOL_POINT_SIZE 28.0
+#define MDZ_MAC_NAV_SYMBOL_POINT_SIZE 22.0
+#define MDZ_MAC_MINI_BUTTON_SIDE 56.0
+#define MDZ_MAC_TABLE_ROW_HEIGHT 52.0
+#define MDZ_MAC_CELL_ICON_SIDE 24.0
+#define MDZ_MAC_CELL_TRAILING_PAD 28.0
+#define MDZ_MAC_CELL_LEADING_PAD 16.0
+#define MDZ_MAC_TITLEBAR_HEIGHT 28.0
+#define MDZ_MAC_TRAFFIC_LIGHTS_INSET 78.0
+
+#ifdef __OBJC__
+static inline BOOL MDZIsMacDesktop(void) {
+#if TARGET_OS_MACCATALYST
+    return YES;
+#else
+    return [NSProcessInfo processInfo].isiOSAppOnMac;
+#endif
+}
+
+#if __has_include(<UIKit/UIKit.h>)
+#import <UIKit/UIKit.h>
+
+// Keep trailing list icons/chevrons inside the visible row, not the storyboard/table width.
+static inline void MDZFitCellTrailingIcons(UITableViewCell *cell, UIButton *actionView, UIButton *secActionView, UIView *topLabel, UIView *bottomLabel) {
+    if (!cell) {
+        return;
+    }
+    UIView *host = cell.contentView;
+    CGFloat rowW = CGRectGetWidth(host.bounds);
+    if (rowW < 8.0) {
+        rowW = CGRectGetWidth(cell.bounds);
+    }
+    UITableView *tv = nil;
+    for (UIView *p = cell.superview; p; p = p.superview) {
+        if ([p isKindOfClass:[UITableView class]]) {
+            tv = (UITableView *)p;
+            break;
+        }
+    }
+    if (tv && MDZIsMacDesktop()) {
+        CGRect vis = [host convertRect:tv.bounds fromView:tv];
+        CGFloat visibleRight = MIN(CGRectGetWidth(host.bounds), CGRectGetMaxX(vis));
+        if (visibleRight > 48.0) {
+            rowW = visibleRight;
+        }
+        CGFloat tableW = CGRectGetWidth(tv.bounds);
+        if (tableW > 48.0) {
+            rowW = MIN(rowW, tableW);
+        }
+        CGFloat cellW = CGRectGetWidth(cell.bounds);
+        if (cellW > 48.0) {
+            rowW = MIN(rowW, cellW);
+        }
+    }
+    if (rowW < 48.0) {
+        return;
+    }
+    if (MDZIsMacDesktop()) {
+        host.clipsToBounds = YES;
+        cell.clipsToBounds = YES;
+    }
+    CGFloat pad = MDZIsMacDesktop() ? MDZ_MAC_CELL_TRAILING_PAD : 4.0;
+    CGFloat iconSide = MDZIsMacDesktop() ? MDZ_MAC_CELL_ICON_SIDE : 40.0;
+    CGFloat gap = MDZIsMacDesktop() ? 6.0 : 4.0;
+    CGFloat xRight = rowW - pad;
+    CGFloat hostH = CGRectGetHeight(host.bounds);
+    if (hostH < 8.0) {
+        hostH = CGRectGetHeight(cell.bounds);
+    }
+    CGFloat midY = MAX(0.0, (hostH - iconSide) / 2.0);
+    if (secActionView && !secActionView.hidden) {
+        xRight -= iconSide;
+        secActionView.frame = CGRectMake(xRight, midY, iconSide, iconSide);
+        secActionView.contentHorizontalAlignment = UIControlContentHorizontalAlignmentCenter;
+        secActionView.imageView.contentMode = UIViewContentModeScaleAspectFit;
+        secActionView.clipsToBounds = YES;
+        xRight -= gap;
+    }
+    if (actionView && !actionView.hidden) {
+        xRight -= iconSide;
+        actionView.frame = CGRectMake(xRight, midY, iconSide, iconSide);
+        actionView.contentHorizontalAlignment = UIControlContentHorizontalAlignmentCenter;
+        actionView.imageView.contentMode = UIViewContentModeScaleAspectFit;
+        actionView.clipsToBounds = YES;
+        xRight -= gap;
+    }
+    CGFloat textMax = xRight - 8.0 - (topLabel ? topLabel.frame.origin.x : 0.0);
+    if (textMax < 32.0) {
+        textMax = 32.0;
+    }
+    if (topLabel) {
+        CGRect tf = topLabel.frame;
+        tf.size.width = textMax;
+        topLabel.frame = tf;
+    }
+    if (bottomLabel) {
+        CGRect bf = bottomLabel.frame;
+        bf.size.width = MAX(24.0, xRight - 8.0 - bf.origin.x);
+        bottomLabel.frame = bf;
+    }
+}
+
+static inline UIView *MDZMacDisclosureAccessory(void) {
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:11.0 weight:UIImageSymbolWeightSemibold];
+    UIImageView *img = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right" withConfiguration:cfg]];
+    img.tintColor = [UIColor tertiaryLabelColor];
+    img.contentMode = UIViewContentModeCenter;
+    img.frame = CGRectMake(0.0, 10.0, 12.0, 20.0);
+    UIView *wrap = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 18.0, 40.0)];
+    wrap.tag = 91050;
+    [wrap addSubview:img];
+    return wrap;
+}
+
+static inline CGFloat MDZCellLeadX(UITableViewCell *cell) {
+    CGFloat w = cell ? cell.indentationWidth : 10.0;
+    if (w < 1.0) {
+        w = 10.0;
+    }
+    return w + (MDZIsMacDesktop() ? MDZ_MAC_CELL_LEADING_PAD : 0.0);
+}
+
+static inline void MDZMacInsetCellCover(UITableViewCell *cell) {
+    if (!MDZIsMacDesktop() || !cell) {
+        return;
+    }
+    UIView *host = cell.contentView ?: cell;
+    UIView *cover = [host viewWithTag:1006];
+    if (!cover) {
+        cover = [cell viewWithTag:1006];
+    }
+    if (!cover || CGRectGetWidth(cover.frame) < 8.0) {
+        return;
+    }
+    CGFloat dx = MDZ_MAC_CELL_LEADING_PAD - cover.frame.origin.x;
+    if (dx < 0.5) {
+        return;
+    }
+    cover.frame = CGRectOffset(cover.frame, dx, 0);
+    for (NSInteger tag = 1001; tag <= 1003; tag++) {
+        UIView *v = [host viewWithTag:tag];
+        if (v) {
+            v.frame = CGRectOffset(v.frame, dx, 0);
+        }
+    }
+}
+
+static inline void MDZAdaptMacTableCell(UITableViewCell *cell, UIButton *actionView, UIButton *secActionView, UIView *topLabel, UIView *bottomLabel) {
+    if (!cell) {
+        return;
+    }
+    if (MDZIsMacDesktop()) {
+        if (cell.accessoryType == UITableViewCellAccessoryDisclosureIndicator || cell.accessoryView.tag == 91050) {
+            cell.accessoryType = UITableViewCellAccessoryNone;
+            if (cell.accessoryView.tag != 91050) {
+                cell.accessoryView = MDZMacDisclosureAccessory();
+            }
+        }
+        MDZMacInsetCellCover(cell);
+    }
+    MDZFitCellTrailingIcons(cell, actionView, secActionView, topLabel, bottomLabel);
+}
+
+static inline void MDZAdaptVisibleMacTableCells(UITableView *tableView) {
+    if (!MDZIsMacDesktop() || !tableView) {
+        return;
+    }
+    for (UITableViewCell *cell in tableView.visibleCells) {
+        UIButton *actionView = (UIButton *)[cell.contentView viewWithTag:1004];
+        UIButton *secActionView = (UIButton *)[cell.contentView viewWithTag:1005];
+        UIView *topLabel = [cell.contentView viewWithTag:1001];
+        UIView *bottomLabel = [cell.contentView viewWithTag:1002];
+        MDZAdaptMacTableCell(cell, actionView, secActionView, topLabel, bottomLabel);
+    }
+}
+#endif /* UIKit */
+#endif
 
 #define MDZ_UIFONT_WEIGHT UIFontWeightMedium
 

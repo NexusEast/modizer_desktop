@@ -14,6 +14,7 @@
 + (void)setAlwaysOnTop:(BOOL)enabled;
 + (void)enableAlwaysOnTop;
 + (void)disableAlwaysOnTop;
++ (void)applyDesktopWindowGeometry;
 @end
 
 @implementation ModizerMacWindowManager
@@ -45,6 +46,15 @@
 
 + (void)disableAlwaysOnTop {
     [self setAlwaysOnTop:NO];
+}
+
++ (void)applyDesktopWindowGeometry {
+    NSSize content = NSMakeSize(MODIZER_MAC_WIDTH_DEFAULT, MODIZER_MAC_HEIGHT_DEFAULT);
+    NSSize minSize = NSMakeSize(MODIZER_MACM1_WIDTH_MIN, MODIZER_MACM1_HEIGHT_MIN);
+    for (NSWindow *window in [NSApp windows]) {
+        [window setContentMinSize:minSize];
+        [window setContentSize:content];
+    }
 }
 
 // Auto-load quand le bundle est chargé

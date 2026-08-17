@@ -22,6 +22,29 @@
 #import "ModizerPlaylistBridge.h"
 #import "ModizFileHelper.h"
 #import "CloudStorageManager.h"
+#import "AppDelegate_Phone.h"
+#import "MacSidebarLayout.h"
+#import <objc/runtime.h>
+
+#if TARGET_OS_MACCATALYST
+@interface myTabBarController (MDZMacLayout)
+- (void)mdzInstallPersistentLibrarySplitIfNeeded;
+- (void)mdzHideSidebarNowPlayingButtons;
+- (UINavigationController *)mdzStandalonePlayerNavigationController;
+- (void)mdzInstallMacSidebarSegmentIfNeeded;
+- (void)mdzLayoutMacSidebarSegment;
+- (void)mdzApplyMacTabBarHidden;
+- (void)mdzApplyMacSidebarNavChrome;
+- (void)mdzPinMacSidebarSearchBars;
+- (void)mdzHideSystemTabOverlays;
+- (void)mdzHideSystemTabOverlaysInView:(UIView *)view depth:(int)depth;
+- (void)mdzDumpTabLikeViews:(UIView *)view depth:(int)depth file:(FILE *)fp;
+@end
+
+@interface UINavigationController (MDZMacPlayer)
+- (void)mdz_pushViewController:(UIViewController *)viewController animated:(BOOL)animated;
+@end
+#endif
 
 extern NSMutableArray *mac_key_pressed,*mac_key_released;
 
@@ -477,15 +500,16 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     }
     
     if (@available(iOS 18.0, *)) {
+#if TARGET_OS_MACCATALYST
+        self.mode = UITabBarControllerModeTabBar;
+        [self setTabBarHidden:YES animated:NO];
+        self.sidebar.hidden = YES;
+#else
         if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
-            //self.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassCompact;//UIUserInterfaceSizeClassRegular;
             self.traitOverrides.horizontalSizeClass = UIUserInterfaceSizeClassRegular;
         }
-    }
-    // On iOS 18+, explicitly disable the tab bar mode that shows tabs as segmented control
-    if (@available(iOS 18.0, *)) {
-        // Set mode to tabBar (traditional) instead of automatic which might show segmented control
-        self.mode = UITabBarControllerModeTabSidebar;//UITabBarControllerModeTabBar;
+        self.mode = UITabBarControllerModeTabSidebar;
+#endif
     }
     
     
@@ -615,6 +639,9 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
             nav.delegate = self;
         }
     }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self mdzInstallPersistentLibrarySplitIfNeeded];
+    });
 #endif
 
 //    if (@available(iOS 15.0, *)) {
@@ -638,6 +665,13 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     is_macOS=true;
 #endif
     if (is_macOS) {
+#if TARGET_OS_MACCATALYST
+        if (self.catalystSplitViewController) {
+            [self mdzApplyMacTabBarHidden];
+            [self mdzLayoutMacSidebarSegment];
+            return;
+        }
+#endif
         // Continuously enforce tab bar at zero frame during all layout passes
         self.tabBar.hidden = YES;
         self.tabBar.frame = CGRectZero;
@@ -646,10 +680,372 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
 
 
 #if TARGET_OS_MACCATALYST
+- (UINavigationController *)mdzDetailNavigationController {
+    UIViewController *selected = self.selectedViewController;
+    if ([selected isKindOfClass:[UINavigationController class]]) {
+        return (UINavigationController *)selected;
+    }
+    if (self.viewControllers.count > 0 && [self.viewControllers.firstObject isKindOfClass:[UINavigationController class]]) {
+        self.selectedIndex = 0;
+        return (UINavigationController *)self.viewControllers.firstObject;
+    }
+    return nil;
+}
+
+- (BOOL)mdzShowPlayerOnDetailSide {
+    // Player lives in the split secondary column; never push it onto the sidebar.
+    return (self.catalystSplitViewController != nil);
+}
+
+- (UINavigationController *)mdzStandalonePlayerNavigationController {
+    if (!detailViewControllerIphone) {
+        return nil;
+    }
+    UINavigationController *nav = detailViewControllerIphone.navigationController;
+    if (nav && ![self.viewControllers containsObject:nav] && nav.viewControllers.firstObject == detailViewControllerIphone) {
+        nav.navigationBarHidden = YES;
+        return nav;
+    }
+    if (detailViewControllerIphone.parentViewController) {
+        UINavigationController *oldNav = detailViewControllerIphone.navigationController;
+        if (oldNav) {
+            NSMutableArray *stack = [oldNav.viewControllers mutableCopy];
+            [stack removeObject:detailViewControllerIphone];
+            oldNav.viewControllers = stack ?: @[];
+        } else {
+            [detailViewControllerIphone willMoveToParentViewController:nil];
+            [detailViewControllerIphone.view removeFromSuperview];
+            [detailViewControllerIphone removeFromParentViewController];
+        }
+    }
+    nav = [[UINavigationController alloc] initWithRootViewController:detailViewControllerIphone];
+    nav.navigationBar.prefersLargeTitles = NO;
+    nav.navigationBarHidden = YES;
+    return nav;
+}
+
+- (void)mdzApplyMacTabBarHidden {
+    if (@available(iOS 18.0, *)) {
+        if (!self.tabBarHidden) {
+            [self setTabBarHidden:YES animated:NO];
+        }
+        self.sidebar.hidden = YES;
+    }
+    self.tabBar.hidden = YES;
+    self.tabBar.alpha = 0;
+    self.tabBar.userInteractionEnabled = NO;
+}
+
+- (void)mdzDumpTabLikeViews:(UIView *)view depth:(int)depth file:(FILE *)fp {
+    if (!view || depth > 24 || !fp) {
+        return;
+    }
+    NSString *cls = NSStringFromClass(view.class);
+    if ([cls.lowercaseString containsString:@"tab"] || [cls containsString:@"Platter"] || [cls containsString:@"Segment"] || [cls containsString:@"Floating"]) {
+        fprintf(fp, "%*s%s frame=%.0f,%.0f %.0fx%.0f hidden=%d\n", depth * 2, "", cls.UTF8String,
+                view.frame.origin.x, view.frame.origin.y, view.frame.size.width, view.frame.size.height, view.hidden);
+    }
+    for (UIView *sub in view.subviews) {
+        [self mdzDumpTabLikeViews:sub depth:depth + 1 file:fp];
+    }
+}
+
+- (void)mdzHideSystemTabOverlays {
+    [self mdzApplyMacTabBarHidden];
+    FILE *fp = fopen("/tmp/mdz_tab_views.txt", "w");
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) {
+            continue;
+        }
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        fprintf(fp ?: stdout, "windows=%lu\n", (unsigned long)windowScene.windows.count);
+        for (UIWindow *window in windowScene.windows) {
+            if (fp) {
+                fprintf(fp, "WINDOW %s frame=%.0f,%.0f %.0fx%.0f hidden=%d\n",
+                        NSStringFromClass(window.class).UTF8String,
+                        window.frame.origin.x, window.frame.origin.y, window.frame.size.width, window.frame.size.height, window.hidden);
+                [self mdzDumpTabLikeViews:window depth:1 file:fp];
+            }
+            [self mdzHideSystemTabOverlaysInView:window];
+        }
+    }
+    if (fp) {
+        fclose(fp);
+    }
+}
+
+- (void)mdzHideSystemTabOverlaysInView:(UIView *)view {
+    [self mdzHideSystemTabOverlaysInView:view depth:0];
+}
+
+- (void)mdzHideSystemTabOverlaysInView:(UIView *)view depth:(int)depth {
+    if (!view || depth > 24) {
+        return;
+    }
+    NSString *cls = NSStringFromClass(view.class);
+    BOOL hide = NO;
+    if ([view isKindOfClass:[UITabBar class]]) {
+        hide = YES;
+    } else if ([cls containsString:@"BottomTabBarGroup"] ||
+               [cls containsString:@"TabBarPlatter"] ||
+               [cls containsString:@"_UITabBarAuxiliary"] ||
+               [cls containsString:@"VisualProvider_Floating"] ||
+               [cls containsString:@"_UITabBarVisualProvider"]) {
+        hide = YES;
+    }
+    if (hide) {
+        view.hidden = YES;
+        view.alpha = 0;
+    }
+    for (UIView *sub in [view.subviews copy]) {
+        [self mdzHideSystemTabOverlaysInView:sub depth:depth + 1];
+    }
+}
+
+- (void)mdzInstallMacSidebarSegmentIfNeeded {
+    if (self.macSidebarLayout && self.macSidebarSegment) {
+        [self mdzLayoutMacSidebarSegment];
+        return;
+    }
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
+    for (UIViewController *vc in self.viewControllers) {
+        NSString *title = vc.tabBarItem.title;
+        if (title.length == 0) {
+            title = vc.title ?: @"•";
+        }
+        [titles addObject:title];
+    }
+    if (titles.count == 0) {
+        return;
+    }
+    MacSidebarLayout *layout = [MacSidebarLayout loadFromNib];
+    if (!layout) {
+        return;
+    }
+    self.macSidebarLayout = layout;
+    UISegmentedControl *segment = layout.tabSegment;
+    if (!segment) {
+        segment = [[UISegmentedControl alloc] initWithItems:titles];
+        UIView *host = layout.tabHost ?: layout;
+        segment.frame = host.bounds;
+        segment.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [host addSubview:segment];
+    } else {
+        [segment removeAllSegments];
+        for (NSUInteger i = 0; i < titles.count; i++) {
+            [segment insertSegmentWithTitle:titles[i] atIndex:i animated:NO];
+        }
+    }
+    segment.selectedSegmentIndex = (NSInteger)self.selectedIndex;
+    segment.apportionsSegmentWidthsByContent = NO;
+    [segment addTarget:self action:@selector(mdzSidebarSegmentChanged:) forControlEvents:UIControlEventValueChanged];
+    self.macSidebarSegment = segment;
+    [self.view addSubview:layout];
+    [layout prepareForRuntime];
+    [self mdzLayoutMacSidebarSegment];
+}
+
+- (void)mdzApplyMacSidebarNavChrome {
+    for (UIViewController *vc in self.viewControllers) {
+        if (![vc isKindOfClass:[UINavigationController class]]) {
+            continue;
+        }
+        UINavigationController *nav = (UINavigationController *)vc;
+        nav.navigationBar.prefersLargeTitles = NO;
+        nav.interactivePopGestureRecognizer.enabled = YES;
+        for (UIViewController *child in nav.viewControllers) {
+            child.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
+            child.navigationItem.hidesBackButton = YES;
+            child.navigationItem.leftBarButtonItem = nil;
+        }
+        if (!nav.navigationBarHidden) {
+            [nav setNavigationBarHidden:YES animated:NO];
+        }
+    }
+}
+
+- (void)mdzPinMacSidebarSearchBars {
+    UIViewController *selected = self.selectedViewController;
+    if ([selected isKindOfClass:[UINavigationController class]]) {
+        selected = ((UINavigationController *)selected).topViewController;
+    }
+    UIView *host = selected.view;
+    if (!host) {
+        return;
+    }
+    CGFloat top = host.safeAreaInsets.top;
+    CGFloat width = CGRectGetWidth(host.bounds);
+    for (UIView *sub in host.subviews) {
+        if (![sub isKindOfClass:[UISearchBar class]]) {
+            continue;
+        }
+        UISearchBar *bar = (UISearchBar *)sub;
+        if (bar.superview != host) {
+            continue;
+        }
+        bar.frame = CGRectMake(0, top, width, 44.0);
+    }
+}
+
+- (void)mdzLayoutMacSidebarSegment {
+    if (!self.macSidebarLayout) {
+        [self mdzInstallMacSidebarSegmentIfNeeded];
+        if (!self.macSidebarLayout) {
+            return;
+        }
+    }
+    [self mdzApplyMacTabBarHidden];
+    [self mdzApplyMacSidebarNavChrome];
+    CGFloat width = CGRectGetWidth(self.view.bounds);
+    if (width < 8.0) {
+        return;
+    }
+    MacSidebarLayout *layout = self.macSidebarLayout;
+    CGFloat barH = CGRectGetHeight(layout.bounds);
+    if (barH < 36.0) {
+        barH = 48.0;
+    }
+    CGFloat sysTop = self.view.safeAreaInsets.top - self.additionalSafeAreaInsets.top;
+    if (sysTop < 0.0) {
+        sysTop = 0.0;
+    }
+    CGFloat titleTop = MAX(sysTop, MDZ_MAC_TITLEBAR_HEIGHT);
+    layout.frame = CGRectMake(0, titleTop, width, barH);
+    layout.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
+    if (self.macSidebarSegment && layout.tabHost) {
+        self.macSidebarSegment.frame = layout.tabHost.bounds;
+    }
+    CGFloat neededTop = (titleTop - sysTop) + barH;
+    if (fabs(self.additionalSafeAreaInsets.top - neededTop) > 0.5) {
+        self.additionalSafeAreaInsets = UIEdgeInsetsMake(neededTop, 0, 0, 0);
+    }
+    [self mdzPinMacSidebarSearchBars];
+    [self.view bringSubviewToFront:layout];
+}
+
+- (void)mdzSidebarSegmentChanged:(UISegmentedControl *)sender {
+    NSInteger idx = sender.selectedSegmentIndex;
+    if (idx >= 0 && idx < (NSInteger)self.viewControllers.count) {
+        self.selectedIndex = (NSUInteger)idx;
+    }
+}
+
+- (void)mdzHideSidebarNowPlayingButtons {
+    for (UIViewController *vc in self.viewControllers) {
+        if (![vc isKindOfClass:[UINavigationController class]]) {
+            continue;
+        }
+        UINavigationController *nav = (UINavigationController *)vc;
+        for (UIViewController *child in nav.viewControllers) {
+            child.navigationItem.rightBarButtonItem = nil;
+        }
+    }
+}
+
+- (void)mdzInstallPersistentLibrarySplitIfNeeded {
+    if (self.catalystSplitViewController) {
+        return;
+    }
+    UIWindow *window = self.view.window;
+    if (!window) {
+        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) {
+                continue;
+            }
+            UIWindowScene *windowScene = (UIWindowScene *)scene;
+            if (windowScene.windows.firstObject) {
+                window = windowScene.windows.firstObject;
+                break;
+            }
+        }
+    }
+    if (!window || !rootViewControllerIphone) {
+        return;
+    }
+
+    UISplitViewController *split = nil;
+    if (@available(iOS 14.0, *)) {
+        split = [[UISplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+        split.preferredSplitBehavior = UISplitViewControllerSplitBehaviorTile;
+        split.displayModeButtonVisibility = UISplitViewControllerDisplayModeButtonVisibilityNever;
+        split.primaryBackgroundStyle = UISplitViewControllerBackgroundStyleNone;
+    } else {
+        split = [[UISplitViewController alloc] init];
+    }
+    self.catalystSplitViewController = split;
+    split.preferredDisplayMode = UISplitViewControllerDisplayModeOneBesideSecondary;
+    split.presentsWithGesture = NO;
+    split.preferredPrimaryColumnWidth = MDZ_MAC_LIBRARY_COLUMN_WIDTH;
+    split.minimumPrimaryColumnWidth = MDZ_MAC_LIBRARY_COLUMN_MIN;
+    split.maximumPrimaryColumnWidth = MDZ_MAC_LIBRARY_COLUMN_MAX;
+    split.delegate = self;
+
+    // Keep Library/Playlists/Online/Search/More together in the left column.
+    // A custom segmented control sits at the top of that column; hide the
+    // system tab bar so iOS 18 does not draw it across the player.
+    if (@available(iOS 18.0, *)) {
+        self.mode = UITabBarControllerModeTabBar;
+        [self setTabBarHidden:YES animated:NO];
+        self.sidebar.hidden = YES;
+    }
+    [self mdzApplyMacTabBarHidden];
+
+    UINavigationController *playerNav = [self mdzStandalonePlayerNavigationController];
+    [detailViewControllerIphone loadViewIfNeeded];
+    [self mdzHideSidebarNowPlayingButtons];
+
+    if (@available(iOS 14.0, *)) {
+        [split setViewController:self forColumn:UISplitViewControllerColumnPrimary];
+        if (playerNav) {
+            [split setViewController:playerNav forColumn:UISplitViewControllerColumnSecondary];
+        }
+    } else {
+        split.viewControllers = playerNav ? @[self, playerNav] : @[self];
+    }
+    window.rootViewController = split;
+    [self mdzInstallMacSidebarSegmentIfNeeded];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self mdzHideSystemTabOverlays];
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self mdzHideSystemTabOverlays];
+    });
+    [detailViewControllerIphone.view setNeedsLayout];
+
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class cls = [UINavigationController class];
+        Method original = class_getInstanceMethod(cls, @selector(pushViewController:animated:));
+        Method swizzled = class_getInstanceMethod(cls, @selector(mdz_pushViewController:animated:));
+        if (original && swizzled) {
+            method_exchangeImplementations(original, swizzled);
+        }
+    });
+}
+
+- (UISplitViewControllerDisplayMode)targetDisplayModeForActionInSplitViewController:(UISplitViewController *)svc {
+    return UISplitViewControllerDisplayModeOneBesideSecondary;
+}
+
+- (BOOL)splitViewController:(UISplitViewController *)splitViewController
+collapseSecondaryViewController:(UIViewController *)secondaryViewController
+ontoPrimaryViewController:(UIViewController *)primaryViewController {
+    return NO;
+}
+
 - (void)setSelectedViewController:(UIViewController *)selectedViewController {
     [super setSelectedViewController:selectedViewController];
 
-    // Keep tab bar hidden and at zero frame
+    if (self.catalystSplitViewController) {
+        [self mdzApplyMacTabBarHidden];
+        if (self.macSidebarSegment) {
+            NSInteger idx = [self.viewControllers indexOfObject:selectedViewController];
+            if (idx != NSNotFound && self.macSidebarSegment.selectedSegmentIndex != idx) {
+                self.macSidebarSegment.selectedSegmentIndex = idx;
+            }
+        }
+        return;
+    }
     self.tabBar.hidden = YES;
     self.tabBar.frame = CGRectZero;
 }
@@ -657,7 +1053,15 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
 - (void)setSelectedIndex:(NSUInteger)selectedIndex {
     [super setSelectedIndex:selectedIndex];
 
-    // Keep tab bar hidden and at zero frame
+    if (self.catalystSplitViewController) {
+        [self mdzApplyMacTabBarHidden];
+        if (self.macSidebarSegment &&
+            selectedIndex < (NSUInteger)self.macSidebarSegment.numberOfSegments &&
+            self.macSidebarSegment.selectedSegmentIndex != (NSInteger)selectedIndex) {
+            self.macSidebarSegment.selectedSegmentIndex = (NSInteger)selectedIndex;
+        }
+        return;
+    }
     self.tabBar.hidden = YES;
     self.tabBar.frame = CGRectZero;
 }
@@ -795,6 +1199,9 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
 //}
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+#if TARGET_OS_MACCATALYST
+    [self mdzInstallPersistentLibrarySplitIfNeeded];
+#endif
     
     static bool firstcall=true;
     
@@ -1268,6 +1675,11 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
 }*/
 
 -(void) goToPlayerView {
+#if TARGET_OS_MACCATALYST
+    if ([self mdzShowPlayerOnDetailSide]) {
+        return;
+    }
+#endif
     UIViewController *currentVC=[self visibleViewController:self];
     if (currentVC) {
         if ([currentVC respondsToSelector:@selector(goPlayer)]) [currentVC performSelector:@selector(goPlayer)];
@@ -1447,8 +1859,22 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
 - (void)navigationController:(UINavigationController *)navigationController
        willShowViewController:(UIViewController *)viewController
                      animated:(BOOL)animated {
-    // Ensure the tab bar stays hidden and at zero frame
-    // This is the key to making child view controllers use the full space
+    if (self.catalystSplitViewController) {
+        [self mdzApplyMacTabBarHidden];
+        [self mdzApplyMacSidebarNavChrome];
+        if (navigationController == self.rootViewControllerIphone.navigationController &&
+            [viewController isKindOfClass:[DetailViewControllerIphone class]]) {
+            NSMutableArray *stack = [navigationController.viewControllers mutableCopy];
+            [stack removeObject:viewController];
+            navigationController.viewControllers = stack;
+            [self mdzShowPlayerOnDetailSide];
+        } else if ([self.viewControllers containsObject:navigationController]) {
+            [navigationController setNavigationBarHidden:YES animated:NO];
+            viewController.navigationItem.hidesBackButton = YES;
+            viewController.navigationItem.leftBarButtonItem = nil;
+        }
+        return;
+    }
     self.tabBar.hidden = YES;
     self.tabBar.frame = CGRectZero;
 }
@@ -1459,4 +1885,18 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
 }
 
 @end
+
+#if TARGET_OS_MACCATALYST
+@implementation UINavigationController (MDZMacPlayer)
+- (void)mdz_pushViewController:(UIViewController *)viewController animated:(BOOL)animated {
+    if ([viewController isKindOfClass:[DetailViewControllerIphone class]]) {
+        AppDelegate_Phone *appDelegate = (AppDelegate_Phone *)[[UIApplication sharedApplication] delegate];
+        if (appDelegate.tabBarC.catalystSplitViewController && [appDelegate.tabBarC mdzShowPlayerOnDetailSide]) {
+            return;
+        }
+    }
+    [self mdz_pushViewController:viewController animated:animated];
+}
+@end
+#endif
 

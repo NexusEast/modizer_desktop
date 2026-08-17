@@ -1237,6 +1237,14 @@
 		CC6B93662EE0F24600383CC4 /* MDZCarPlaySceneDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = CC6B93652EE0F24600383CC4 /* MDZCarPlaySceneDelegate.mm */; };
 		CC6CBDEF17DBE380006DCBC7 /* EQViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = CC6CBDEE17DBE380006DCBC7 /* EQViewController.xib */; };
 		CC6CBDF317DBE3A8006DCBC7 /* EQViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = CC6CBDF217DBE3A8006DCBC7 /* EQViewController.mm */; };
+		A8E91B01001A4C4A00000004 /* MacPlayerLayout.mm in Sources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000002 /* MacPlayerLayout.mm */; };
+		A8E91B01001A4C4A00000005 /* MacPlayerLayout.mm in Sources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000002 /* MacPlayerLayout.mm */; };
+		A8E91B01001A4C4A00000006 /* MacPlayerLayout.xib in Resources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000003 /* MacPlayerLayout.xib */; };
+		A8E91B01001A4C4A00000007 /* MacPlayerLayout.xib in Resources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000003 /* MacPlayerLayout.xib */; };
+		A8E91B01001A4C4A00000013 /* MacSidebarLayout.mm in Sources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000011 /* MacSidebarLayout.mm */; };
+		A8E91B01001A4C4A00000014 /* MacSidebarLayout.mm in Sources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000011 /* MacSidebarLayout.mm */; };
+		A8E91B01001A4C4A00000015 /* MacSidebarLayout.xib in Resources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000012 /* MacSidebarLayout.xib */; };
+		A8E91B01001A4C4A00000016 /* MacSidebarLayout.xib in Resources */ = {isa = PBXBuildFile; fileRef = A8E91B01001A4C4A00000012 /* MacSidebarLayout.xib */; };
 		CC6CBDF617DC615F006DCBC7 /* EQView.m in Sources */ = {isa = PBXBuildFile; fileRef = CC6CBDF517DC615F006DCBC7 /* EQView.m */; };
 		CC78DBA72B9A045A00A37464 /* ModizFileHelper.mm in Sources */ = {isa = PBXBuildFile; fileRef = CC78DBA62B9A045A00A37464 /* ModizFileHelper.mm */; };
 		CC7E810212698C29006EF083 /* previous.png in Resources */ = {isa = PBXBuildFile; fileRef = CC7E810112698C29006EF083 /* previous.png */; };
@@ -4388,6 +4396,12 @@
 		CC6B93642EE0F24600383CC4 /* MDZCarPlaySceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = MDZCarPlaySceneDelegate.h; path = carplay/MDZCarPlaySceneDelegate.h; sourceTree = "<group>"; };
 		CC6B93652EE0F24600383CC4 /* MDZCarPlaySceneDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = MDZCarPlaySceneDelegate.mm; path = carplay/MDZCarPlaySceneDelegate.mm; sourceTree = "<group>"; };
 		CC6CBDEE17DBE380006DCBC7 /* EQViewController.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = EQViewController.xib; sourceTree = "<group>"; };
+		A8E91B01001A4C4A00000001 /* MacPlayerLayout.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MacPlayerLayout.h; sourceTree = "<group>"; };
+		A8E91B01001A4C4A00000002 /* MacPlayerLayout.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = MacPlayerLayout.mm; sourceTree = "<group>"; };
+		A8E91B01001A4C4A00000003 /* MacPlayerLayout.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = MacPlayerLayout.xib; sourceTree = "<group>"; };
+		A8E91B01001A4C4A00000010 /* MacSidebarLayout.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MacSidebarLayout.h; sourceTree = "<group>"; };
+		A8E91B01001A4C4A00000011 /* MacSidebarLayout.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = MacSidebarLayout.mm; sourceTree = "<group>"; };
+		A8E91B01001A4C4A00000012 /* MacSidebarLayout.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = MacSidebarLayout.xib; sourceTree = "<group>"; };
 		CC6CBDF117DBE3A8006DCBC7 /* EQViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EQViewController.h; sourceTree = "<group>"; };
 		CC6CBDF217DBE3A8006DCBC7 /* EQViewController.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = EQViewController.mm; sourceTree = "<group>"; };
 		CC6CBDF417DC615F006DCBC7 /* EQView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EQView.h; sourceTree = "<group>"; };
@@ -4849,7 +4863,7 @@
 		CCBF27302ECB2F680039936C /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		CCBFC9A22EAA146300014B5D /* OSLog.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OSLog.framework; path = System/Library/Frameworks/OSLog.framework; sourceTree = SDKROOT; };
 		CCC3A1C22BE77E6A00710980 /* liblzma_mdz.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = liblzma_mdz.xcodeproj; path = liblzma_mdz/liblzma_mdz.xcodeproj; sourceTree = "<group>"; };
-		CCC541B62B89DD1700E97EC1 /* adplug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = adplug.xcodeproj; path = adplug/adplug.xcodeproj; sourceTree = "<group>"; };
+		CCC541B62B89DD1700E97EC1 /* adplug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = adplug.xcodeproj; path = Adplug/adplug.xcodeproj; sourceTree = "<group>"; };
 		CCC543D62B89E83400E97EC1 /* binio.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = binio.xcodeproj; path = binio/binio.xcodeproj; sourceTree = "<group>"; };
 		CCC543F92B8B66F700E97EC1 /* SearchCommonFunctions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SearchCommonFunctions.h; sourceTree = "<group>"; };
 		CCC6776917F62BCC00F16A54 /* txtMenu7b_2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = txtMenu7b_2x.png; sourceTree = "<group>"; };
@@ -5575,6 +5589,8 @@
 				CC89CB242EC14FDB000A110A /* LaunchScreen.storyboard */,
 				CCDF02E62EE5817800FC15AA /* Main.storyboard */,
 				CC6CBDEE17DBE380006DCBC7 /* EQViewController.xib */,
+				A8E91B01001A4C4A00000003 /* MacPlayerLayout.xib */,
+				A8E91B01001A4C4A00000012 /* MacSidebarLayout.xib */,
 				33B7AD0E17C75A8B00C1E404 /* MaintenanceViewController.xib */,
 				CCE8D7442B8D67460076D8C0 /* AnimatedLaunch.xib */,
 				337FF18617A9D18900CE0A28 /* PlaylistViewController.xib */,
@@ -6334,6 +6350,10 @@
 				CC16CA502EAF88B900255213 /* MDZFontAwesome.h */,
 				CCB8D96B17F5F1E4008E6A45 /* MDZUIImageView.h */,
 				CCB8D96C17F5F1E4008E6A45 /* MDZUIImageView.m */,
+				A8E91B01001A4C4A00000001 /* MacPlayerLayout.h */,
+				A8E91B01001A4C4A00000002 /* MacPlayerLayout.mm */,
+				A8E91B01001A4C4A00000010 /* MacSidebarLayout.h */,
+				A8E91B01001A4C4A00000011 /* MacSidebarLayout.mm */,
 				59A65C6B2624D40000BC99D1 /* MiniPlayerVC.h */,
 				59A65C6C2624D40000BC99D1 /* MiniPlayerVC.mm */,
 				59A65C7E262501A000BC99D1 /* MiniPlayerView.h */,
@@ -8644,6 +8664,8 @@
 				CC1E5CC51200B3B8000A8A4E /* star5.png in Resources */,
 				CC1E5EA61200D05E000A8A4E /* iTunesArtwork in Resources */,
 				CC6CBDEF17DBE380006DCBC7 /* EQViewController.xib in Resources */,
+				A8E91B01001A4C4A00000006 /* MacPlayerLayout.xib in Resources */,
+				A8E91B01001A4C4A00000015 /* MacSidebarLayout.xib in Resources */,
 				CC1E5F0D120154A8000A8A4E /* Icon-72.png in Resources */,
 				CC1E5F0F120154A8000A8A4E /* Icon-Small.png in Resources */,
 				CC1E5F10120154A8000A8A4E /* Icon-Small@2x.png in Resources */,
@@ -9352,6 +9374,8 @@
 				CCBE618A2EE2DD44000FDD7E /* star5.png in Resources */,
 				CCBE618B2EE2DD44000FDD7E /* iTunesArtwork in Resources */,
 				CCBE618C2EE2DD44000FDD7E /* EQViewController.xib in Resources */,
+				A8E91B01001A4C4A00000007 /* MacPlayerLayout.xib in Resources */,
+				A8E91B01001A4C4A00000016 /* MacSidebarLayout.xib in Resources */,
 				CCBE618D2EE2DD44000FDD7E /* Icon-72.png in Resources */,
 				CCBE618E2EE2DD44000FDD7E /* Icon-Small.png in Resources */,
 				CCBE618F2EE2DD44000FDD7E /* Icon-Small@2x.png in Resources */,
@@ -10211,6 +10235,8 @@
 				59B9997E25CFE56D0071E144 /* NSString+FontAwesome.m in Sources */,
 				CCE8D74A2B8D68FD0076D8C0 /* AnimatedLaunchVC.mm in Sources */,
 				CC6CBDF317DBE3A8006DCBC7 /* EQViewController.mm in Sources */,
+				A8E91B01001A4C4A00000004 /* MacPlayerLayout.mm in Sources */,
+				A8E91B01001A4C4A00000013 /* MacSidebarLayout.mm in Sources */,
 				CC8368EA2B57CA9B0035A4DA /* gzip68.c in Sources */,
 				CC8368752B57CA9A0035A4DA /* unice68_pack.c in Sources */,
 				3317854117C56EAC00929E8F /* TPKeyboardAvoidingTableView.m in Sources */,
@@ -10426,6 +10452,8 @@
 				CCBE610B2EE2DD44000FDD7E /* NSString+FontAwesome.m in Sources */,
 				CCBE610C2EE2DD44000FDD7E /* AnimatedLaunchVC.mm in Sources */,
 				CCBE610E2EE2DD44000FDD7E /* EQViewController.mm in Sources */,
+				A8E91B01001A4C4A00000005 /* MacPlayerLayout.mm in Sources */,
+				A8E91B01001A4C4A00000014 /* MacSidebarLayout.mm in Sources */,
 				CCBE610F2EE2DD44000FDD7E /* gzip68.c in Sources */,
 				CCBE61102EE2DD44000FDD7E /* unice68_pack.c in Sources */,
 				CCBE61112EE2DD44000FDD7E /* TPKeyboardAvoidingTableView.m in Sources */,
@@ -11180,13 +11208,15 @@
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				AD_HOC_CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZV46EUY73C;
+				DEVELOPMENT_TEAM = "";
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -11385,14 +11415,17 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = "modizer/modizer-mac.entitlements";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				AD_HOC_CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_ENTITLEMENTS = "modizer/modizer-mac-local.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 18;
-				ENABLE_APP_SANDBOX = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
-				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = NO;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
