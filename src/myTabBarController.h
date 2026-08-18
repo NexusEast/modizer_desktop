@@ -92,6 +92,7 @@
 #if TARGET_OS_MACCATALYST
 -(BOOL)mdzShowPlayerOnDetailSide;
 -(void)mdzPinMacSidebarSearchBars;
+-(void)mdzSaveMacBrowseState;
 #endif
 
 @end

@@ -595,7 +595,7 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
     mCurrentWinAskedDownload=0;
     mClickedPrimAction=0;
     
-    if (browse_depth==0) { //Local mode
+    if (browse_depth==0 && [currentPath length]==0) { //Local mode
         currentPath = @"Documents";
         //[currentPath retain];
     }
@@ -887,13 +887,30 @@ static int qsort_CompareArcEntries(const void *entryA, const void *entryB) {
     int local_entries_index,local_nb_entries_limit;
     int browseType;
     int shouldStop=0;
-    static bool no_reentrant=false;
+    static volatile bool no_reentrant=false;
     
-    if (no_reentrant) return;
+    if (no_reentrant) {
+        if (![NSThread isMainThread]) {
+            NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10.0];
+            while (no_reentrant && [deadline timeIntervalSinceNow] > 0) {
+                [NSThread sleepForTimeInterval:0.02];
+            }
+        }
+        if (no_reentrant) return;
+    }
     no_reentrant=true;
+    
+    if ([currentPath length]==0) {
+        no_reentrant=false;
+        return;
+    }
     
     // First check count for each section
     cpath=[ModizFileHelper getFullPathForFilePath:currentPath];
+    if ([cpath length]==0) {
+        no_reentrant=false;
+        return;
+    }
     //Check if it is a directory or an archive
     BOOL isDirectory;
     browseType=0;
@@ -2293,7 +2310,8 @@ static int shouldRestart=1;
     //[self addRefreshView];
     
     
-    if (shouldFillKeys) [self refreshViewReloadFiles];
+    BOOL skipMacListing = MDZIsMacDesktop() && ![RootViewControllerLocalBrowser mdzMacListingAllowed];
+    if (shouldFillKeys && !skipMacListing) [self refreshViewReloadFiles];
     if ((!wasMiniPlayerOn) && [detailViewController mPlaylist_size]) [self showMiniPlayer];
     
 }
@@ -2366,6 +2384,7 @@ static int shouldRestart=1;
                 tabViewRefresh=0;
                 [self hideWaiting];
                 [self.tableView reloadData];
+                [self mdzSelectPlayingFileIfVisible];
                 
                 //self.sBar.enabled=true;//enable search bar
             });
@@ -2429,9 +2448,101 @@ static int shouldRestart=1;
 #endif
 }
 
+- (BOOL)mdzPath:(NSString *)a matchesPlaying:(NSString *)playing playingFull:(NSString *)playingFull {
+    if (a.length == 0 || playing.length == 0) {
+        return NO;
+    }
+    NSString *std = a.stringByStandardizingPath;
+    if ([std isEqualToString:playing] || [std isEqualToString:playingFull]) {
+        return YES;
+    }
+    NSString *full = [ModizFileHelper getFullPathForFilePath:a];
+    if (full.length) {
+        NSString *fullStd = full.stringByStandardizingPath;
+        if ([fullStd isEqualToString:playing] || [fullStd isEqualToString:playingFull]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (void)mdzSelectPlayingFileIfVisible {
+    if (!MDZIsMacDesktop()) {
+        return;
+    }
+    if (!detailViewController || detailViewController.mPlaylist_size <= 0) {
+        return;
+    }
+    int pos = detailViewController.mPlaylist_pos;
+    if (pos < 0 || pos >= detailViewController.mPlaylist_size) {
+        return;
+    }
+    NSString *playing = detailViewController.mPlaylist[pos].mPlaylistFilepath;
+    if (playing.length == 0) {
+        return;
+    }
+    NSString *playingStd = playing.stringByStandardizingPath;
+    NSString *playingFull = [ModizFileHelper getFullPathForFilePath:playing];
+    if (playingFull.length) {
+        playingFull = playingFull.stringByStandardizingPath;
+    }
+    t_local_browse_entry *entries = search_local ? search_local_entries : local_entries;
+    int count = search_local ? search_local_entries_count : local_entries_count;
+    int found = -1;
+    for (int i = 0; i < count; i++) {
+        if ([self mdzPath:entries[i].fullpath matchesPlaying:playingStd playingFull:playingFull]) {
+            found = i;
+            break;
+        }
+    }
+    if (found < 0) {
+        return;
+    }
+    NSIndexPath *ip = [NSIndexPath indexPathForRow:found inSection:1];
+    [self.tableView selectRowAtIndexPath:ip animated:NO scrollPosition:UITableViewScrollPositionMiddle];
+}
+
+#if TARGET_OS_MACCATALYST
+static BOOL sMDZMacListingAllowed = NO;
+#else
+static BOOL sMDZMacListingAllowed = YES;
+#endif
+
++ (BOOL)mdzMacListingAllowed {
+    if (!MDZIsMacDesktop()) {
+        return YES;
+    }
+    return sMDZMacListingAllowed;
+}
+
++ (void)mdzMacAllowListing {
+    sMDZMacListingAllowed = YES;
+}
+
+- (NSInteger)mdzFileEntryCount {
+    return (NSInteger)(search_local ? search_local_entries_count : local_entries_count);
+}
+
+- (void)mdzForceReloadListingThen:(void (^)(void))done {
+    [self loadViewIfNeeded];
+    shouldFillKeys = 1;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self fillKeys];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            tabViewRefresh = 0;
+            [self.tableView reloadData];
+            [self mdzSelectPlayingFileIfVisible];
+            if (done) {
+                done();
+            }
+        });
+    });
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     forceReloadCells=false;
+    [self mdzSelectPlayingFileIfVisible];
     
     
     

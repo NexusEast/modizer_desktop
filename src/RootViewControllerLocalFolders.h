@@ -9,10 +9,16 @@
 #import <UIKit/UIKit.h>
 
 @class DetailViewControllerIphone;
+@class RootViewControllerLocalBrowser;
 
 @interface RootViewControllerLocalFolders : UIViewController <UITableViewDelegate, UITableViewDataSource, UINavigationControllerDelegate>
 
 @property (nonatomic, strong) DetailViewControllerIphone *detailViewController;
 @property (nonatomic, strong) UITableView *tableView;
+
++ (RootViewControllerLocalBrowser *)mdzMakeBrowserAtPath:(NSString *)path
+                                                   title:(NSString *)title
+                                                   depth:(int)depth
+                                                  detail:(DetailViewControllerIphone *)detail;
 
 @end

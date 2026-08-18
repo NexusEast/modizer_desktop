@@ -25,6 +25,7 @@
 #import "AppDelegate_Phone.h"
 #import "MacSidebarLayout.h"
 #import "RootViewControllerLocalFolders.h"
+#import "MDZLocalFolderStore.h"
 #import <objc/runtime.h>
 
 #if TARGET_OS_MACCATALYST
@@ -43,6 +44,13 @@
 - (void)mdzHideSystemTabOverlays;
 - (void)mdzHideSystemTabOverlaysInView:(UIView *)view depth:(int)depth;
 - (void)mdzDumpTabLikeViews:(UIView *)view depth:(int)depth file:(FILE *)fp;
+- (void)mdzSaveMacBrowseState;
+- (void)mdzRestoreMacBrowseStateIfNeeded;
+- (void)mdzScheduleEmptyBrowseRecovery;
+- (void)mdzRecoverEmptyMacBrowseIfNeeded;
+- (RootViewControllerLocalBrowser *)mdzSelectedLocalBrowser;
+- (NSString *)mdzPlayingFilePath;
+- (BOOL)mdzRestoreBrowseForPlayingFile;
 @end
 
 @interface UINavigationController (MDZMacPlayer)
@@ -589,6 +597,9 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     
     [self setViewControllers:filteredTabs animated:NO];
     [self mdzInstallLocalFoldersTabIfNeeded];
+#if TARGET_OS_MACCATALYST
+    [self mdzRestoreMacBrowseStateIfNeeded];
+#endif
     
     // iOS 15+ Fix: Reapply navigation bar appearance after setting view controllers
     if (@available(iOS 15.0, *)) {
@@ -940,6 +951,7 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     if ([keyPath isEqualToString:@"viewControllers"]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self mdzPinMacSidebarSearchBars];
+            [self mdzSaveMacBrowseState];
         });
         return;
     }
@@ -1078,6 +1090,418 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     if (idx >= 0 && idx < (NSInteger)self.viewControllers.count) {
         self.selectedIndex = (NSUInteger)idx;
         [self mdzPinMacSidebarSearchBars];
+        [self mdzSaveMacBrowseState];
+    }
+}
+
+static NSString * const kMDZMacSidebarTabIndex = @"MDZMacSidebarTabIndex";
+static NSString * const kMDZMacBrowseKind = @"MDZMacBrowseKind";
+static NSString * const kMDZMacLocalFolderId = @"MDZMacLocalFolderId";
+static NSString * const kMDZMacBrowseDirPath = @"MDZMacBrowseDirPath";
+static BOOL sMDZMacBrowseRestoring = NO;
+static BOOL sMDZMacBrowseDidRestore = NO;
+
+- (UIViewController *)mdzRootOfTab:(UIViewController *)vc {
+    if ([vc isKindOfClass:[UINavigationController class]]) {
+        return ((UINavigationController *)vc).viewControllers.firstObject;
+    }
+    return vc;
+}
+
+- (NSInteger)mdzIndexOfTabRootClass:(Class)cls {
+    for (NSUInteger i = 0; i < self.viewControllers.count; i++) {
+        if ([[self mdzRootOfTab:self.viewControllers[i]] isKindOfClass:cls]) {
+            return (NSInteger)i;
+        }
+    }
+    return -1;
+}
+
+- (NSString *)mdzDirectoryPathFromBrowsePath:(NSString *)path {
+    if (path.length == 0) {
+        return path;
+    }
+    NSRange cut = [path rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"@?"]];
+    if (cut.location != NSNotFound) {
+        path = [path substringToIndex:cut.location];
+    }
+    if (path.length == 0) {
+        return path;
+    }
+    NSString *full = path;
+    if (![path hasPrefix:@"/"]) {
+        full = [ModizFileHelper getFullPathForFilePath:path];
+    }
+    BOOL isDir = NO;
+    if (full.length && [[NSFileManager defaultManager] fileExistsAtPath:full isDirectory:&isDir] && !isDir) {
+        NSString *parent = full.stringByDeletingLastPathComponent;
+        if ([path hasPrefix:@"/"]) {
+            return parent;
+        }
+        NSString *home = [ModizFileHelper getAppHomeDirectory];
+        if (home.length && [parent hasPrefix:[home stringByAppendingString:@"/"]]) {
+            return [parent substringFromIndex:home.length + 1];
+        }
+        return parent;
+    }
+    return path;
+}
+
+- (void)mdzSaveMacBrowseState {
+    if (!MDZIsMacDesktop() || sMDZMacBrowseRestoring) {
+        return;
+    }
+    NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+    [prefs setInteger:(NSInteger)self.selectedIndex forKey:kMDZMacSidebarTabIndex];
+    UIViewController *selected = self.selectedViewController;
+    UINavigationController *nav = nil;
+    if ([selected isKindOfClass:[UINavigationController class]]) {
+        nav = (UINavigationController *)selected;
+    }
+    UIViewController *root = nav.viewControllers.firstObject;
+    UIViewController *top = nav.topViewController;
+    NSString *kind = @"";
+    NSString *folderId = @"";
+    NSString *dirPath = @"";
+    if ([root isKindOfClass:[RootViewControllerLocalFolders class]]) {
+        kind = @"local";
+        if ([top isKindOfClass:[RootViewControllerLocalBrowser class]]) {
+            dirPath = ((RootViewControllerLocalBrowser *)top).currentPath ?: @"";
+            NSString *std = dirPath.stringByStandardizingPath;
+            NSUInteger bestLen = 0;
+            for (MDZLocalFolder *folder in [MDZLocalFolderStore sharedStore].folders) {
+                NSString *fp = folder.path.stringByStandardizingPath;
+                if (fp.length == 0) {
+                    continue;
+                }
+                BOOL match = [std isEqualToString:fp] || [std hasPrefix:[fp stringByAppendingString:@"/"]];
+                if (match && fp.length >= bestLen) {
+                    bestLen = fp.length;
+                    folderId = folder.identifier ?: @"";
+                }
+            }
+        }
+    } else if ([root isKindOfClass:[RootViewControllerLocalBrowser class]] &&
+               [top isKindOfClass:[RootViewControllerLocalBrowser class]]) {
+        NSString *path = ((RootViewControllerLocalBrowser *)top).currentPath ?: @"";
+        if ([path hasPrefix:@"/"]) {
+            kind = @"local";
+            dirPath = path;
+            NSString *std = dirPath.stringByStandardizingPath;
+            NSUInteger bestLen = 0;
+            for (MDZLocalFolder *folder in [MDZLocalFolderStore sharedStore].folders) {
+                NSString *fp = folder.path.stringByStandardizingPath;
+                if (fp.length == 0) {
+                    continue;
+                }
+                BOOL match = [std isEqualToString:fp] || [std hasPrefix:[fp stringByAppendingString:@"/"]];
+                if (match && fp.length >= bestLen) {
+                    bestLen = fp.length;
+                    folderId = folder.identifier ?: @"";
+                }
+            }
+        } else {
+            kind = @"library";
+            dirPath = path;
+        }
+    }
+    [prefs setObject:kind forKey:kMDZMacBrowseKind];
+    [prefs setObject:folderId forKey:kMDZMacLocalFolderId];
+    [prefs setObject:dirPath forKey:kMDZMacBrowseDirPath];
+    [prefs synchronize];
+}
+
+- (NSArray<NSString *> *)mdzPathStepsFromRoot:(NSString *)rootPath toPath:(NSString *)targetPath {
+    NSString *root = rootPath.stringByStandardizingPath;
+    NSString *target = targetPath.stringByStandardizingPath;
+    if (root.length == 0 || target.length == 0) {
+        return @[];
+    }
+    if ([target isEqualToString:root]) {
+        return @[];
+    }
+    if (![target hasPrefix:[root stringByAppendingString:@"/"]]) {
+        return @[];
+    }
+    NSString *rel = [target substringFromIndex:root.length + 1];
+    NSMutableArray *steps = [NSMutableArray array];
+    NSString *acc = root;
+    for (NSString *part in [rel componentsSeparatedByString:@"/"]) {
+        if (part.length == 0) {
+            continue;
+        }
+        acc = [acc stringByAppendingPathComponent:part];
+        [steps addObject:acc];
+    }
+    return steps;
+}
+
+- (NSString *)mdzExistingDirectoryWalkingUp:(NSString *)path stopAt:(NSString *)rootPath {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *tryPath = path.stringByStandardizingPath;
+    NSString *root = rootPath.stringByStandardizingPath;
+    while (tryPath.length) {
+        BOOL isDir = NO;
+        if ([fm fileExistsAtPath:tryPath isDirectory:&isDir] && isDir) {
+            return tryPath;
+        }
+        if (root.length && [tryPath isEqualToString:root]) {
+            break;
+        }
+        NSString *parent = tryPath.stringByDeletingLastPathComponent;
+        if ([parent isEqualToString:tryPath]) {
+            break;
+        }
+        tryPath = parent;
+    }
+    return rootPath;
+}
+
+- (void)mdzRestoreLocalBrowseFolderId:(NSString *)folderId dirPath:(NSString *)dirPath {
+    UINavigationController *nav = nil;
+    RootViewControllerLocalFolders *folders = nil;
+    NSInteger idx = [self mdzIndexOfTabRootClass:[RootViewControllerLocalFolders class]];
+    if (idx < 0) {
+        return;
+    }
+    nav = (UINavigationController *)self.viewControllers[(NSUInteger)idx];
+    folders = (RootViewControllerLocalFolders *)[self mdzRootOfTab:nav];
+    MDZLocalFolder *folder = nil;
+    for (MDZLocalFolder *item in [MDZLocalFolderStore sharedStore].folders) {
+        if (folderId.length && [item.identifier isEqualToString:folderId]) {
+            folder = item;
+            break;
+        }
+    }
+    if (!folder && dirPath.length) {
+        NSString *std = dirPath.stringByStandardizingPath;
+        for (MDZLocalFolder *item in [MDZLocalFolderStore sharedStore].folders) {
+            NSString *fp = item.path.stringByStandardizingPath;
+            if (fp.length && ([std isEqualToString:fp] || [std hasPrefix:[fp stringByAppendingString:@"/"]])) {
+                folder = item;
+                break;
+            }
+        }
+    }
+    if (!folder || ![folder startAccessing] || folder.path.length == 0) {
+        return;
+    }
+    NSString *rootPath = folder.path.stringByStandardizingPath;
+    NSString *target = dirPath.length ? [self mdzDirectoryPathFromBrowsePath:dirPath] : rootPath;
+    target = [self mdzExistingDirectoryWalkingUp:target stopAt:rootPath];
+    if (![target isEqualToString:rootPath] && ![target hasPrefix:[rootPath stringByAppendingString:@"/"]]) {
+        target = rootPath;
+    }
+    NSMutableArray *stack = [NSMutableArray arrayWithObject:folders];
+    [stack addObject:[RootViewControllerLocalFolders mdzMakeBrowserAtPath:rootPath
+                                                                    title:folder.name
+                                                                    depth:1
+                                                                   detail:self.detailViewControllerIphone]];
+    NSArray<NSString *> *steps = [self mdzPathStepsFromRoot:rootPath toPath:target];
+    int depth = 2;
+    for (NSString *step in steps) {
+        [stack addObject:[RootViewControllerLocalFolders mdzMakeBrowserAtPath:step
+                                                                        title:step.lastPathComponent
+                                                                        depth:depth
+                                                                       detail:self.detailViewControllerIphone]];
+        depth++;
+    }
+    [nav setViewControllers:stack animated:NO];
+}
+
+- (void)mdzRestoreLibraryBrowseDirPath:(NSString *)dirPath {
+    NSInteger idx = [self mdzIndexOfTabRootClass:[RootViewControllerLocalBrowser class]];
+    if (idx < 0 || dirPath.length == 0) {
+        return;
+    }
+    UINavigationController *nav = (UINavigationController *)self.viewControllers[(NSUInteger)idx];
+    RootViewControllerLocalBrowser *root = (RootViewControllerLocalBrowser *)[self mdzRootOfTab:nav];
+    if (![root isKindOfClass:[RootViewControllerLocalBrowser class]]) {
+        return;
+    }
+    NSString *rootPath = root.currentPath.length ? root.currentPath : @"Documents";
+    NSString *target = [self mdzDirectoryPathFromBrowsePath:dirPath];
+    NSString *targetFull = [ModizFileHelper getFullPathForFilePath:target];
+    NSString *rootFull = [ModizFileHelper getFullPathForFilePath:rootPath];
+    if (targetFull.length) {
+        targetFull = [self mdzExistingDirectoryWalkingUp:targetFull stopAt:rootFull];
+    }
+    if (targetFull.length == 0 || rootFull.length == 0) {
+        return;
+    }
+    if ([targetFull isEqualToString:rootFull]) {
+        return;
+    }
+    NSArray<NSString *> *fullSteps = [self mdzPathStepsFromRoot:rootFull toPath:targetFull];
+    if (fullSteps.count == 0) {
+        return;
+    }
+    NSString *home = [ModizFileHelper getAppHomeDirectory].stringByStandardizingPath;
+    NSMutableArray *stack = [NSMutableArray arrayWithObject:root];
+    int depth = 1;
+    for (NSString *fullStep in fullSteps) {
+        NSString *rel = fullStep.stringByStandardizingPath;
+        if (home.length && [rel hasPrefix:[home stringByAppendingString:@"/"]]) {
+            rel = [rel substringFromIndex:home.length + 1];
+        }
+        [stack addObject:[RootViewControllerLocalFolders mdzMakeBrowserAtPath:rel
+                                                                        title:rel.lastPathComponent
+                                                                        depth:depth
+                                                                       detail:self.detailViewControllerIphone]];
+        depth++;
+    }
+    [nav setViewControllers:stack animated:NO];
+}
+
+- (void)mdzRestoreMacBrowseStateIfNeeded {
+    if (!MDZIsMacDesktop() || sMDZMacBrowseDidRestore) {
+        return;
+    }
+    sMDZMacBrowseDidRestore = YES;
+    sMDZMacBrowseRestoring = YES;
+    for (MDZLocalFolder *folder in [MDZLocalFolderStore sharedStore].folders) {
+        [folder startAccessing];
+    }
+    NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+    NSString *kind = [prefs stringForKey:kMDZMacBrowseKind];
+    NSInteger tab = [prefs integerForKey:kMDZMacSidebarTabIndex];
+    NSString *dirPath = [prefs stringForKey:kMDZMacBrowseDirPath];
+    NSString *folderId = [prefs stringForKey:kMDZMacLocalFolderId];
+    if ([dirPath hasPrefix:@"/"] && ![kind isEqualToString:@"local"]) {
+        kind = @"local";
+    }
+    if ([kind isEqualToString:@"local"]) {
+        NSInteger found = [self mdzIndexOfTabRootClass:[RootViewControllerLocalFolders class]];
+        if (found >= 0) {
+            tab = found;
+        }
+    } else if ([kind isEqualToString:@"library"]) {
+        NSInteger found = [self mdzIndexOfTabRootClass:[RootViewControllerLocalBrowser class]];
+        if (found >= 0) {
+            tab = found;
+        }
+    }
+    if (tab >= 0 && tab < (NSInteger)self.viewControllers.count) {
+        self.selectedIndex = (NSUInteger)tab;
+    }
+    if ([kind isEqualToString:@"local"]) {
+        [self mdzRestoreLocalBrowseFolderId:folderId dirPath:dirPath];
+    } else if ([kind isEqualToString:@"library"]) {
+        [self mdzRestoreLibraryBrowseDirPath:dirPath];
+    }
+    sMDZMacBrowseRestoring = NO;
+    [RootViewControllerLocalBrowser mdzMacAllowListing];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self mdzPinMacSidebarSearchBars];
+        RootViewControllerLocalBrowser *browser = [self mdzSelectedLocalBrowser];
+        if (browser) {
+            [browser mdzForceReloadListingThen:^{
+                [self mdzRecoverEmptyMacBrowseIfNeeded];
+            }];
+        }
+        [self mdzScheduleEmptyBrowseRecovery];
+    });
+}
+
+- (RootViewControllerLocalBrowser *)mdzSelectedLocalBrowser {
+    UIViewController *selected = self.selectedViewController;
+    if (![selected isKindOfClass:[UINavigationController class]]) {
+        return nil;
+    }
+    UIViewController *top = ((UINavigationController *)selected).topViewController;
+    if ([top isKindOfClass:[RootViewControllerLocalBrowser class]]) {
+        return (RootViewControllerLocalBrowser *)top;
+    }
+    return nil;
+}
+
+- (NSString *)mdzPlayingFilePath {
+    DetailViewControllerIphone *detail = self.detailViewControllerIphone;
+    if (!detail || !detail.mPlaylist || detail.mPlaylist_size <= 0) {
+        return nil;
+    }
+    int pos = detail.mPlaylist_pos;
+    if (pos < 0 || pos >= detail.mPlaylist_size) {
+        return nil;
+    }
+    return detail.mPlaylist[pos].mPlaylistFilepath;
+}
+
+- (BOOL)mdzRestoreBrowseForPlayingFile {
+    NSString *playing = [self mdzPlayingFilePath];
+    if (playing.length == 0) {
+        return NO;
+    }
+    NSString *dirPath = [self mdzDirectoryPathFromBrowsePath:playing];
+    NSString *full = [ModizFileHelper getFullPathForFilePath:dirPath];
+    if (full.length == 0) {
+        return NO;
+    }
+    NSString *std = full.stringByStandardizingPath;
+    for (MDZLocalFolder *item in [MDZLocalFolderStore sharedStore].folders) {
+        if (![item startAccessing] || item.path.length == 0) {
+            continue;
+        }
+        NSString *fp = item.path.stringByStandardizingPath;
+        if ([std isEqualToString:fp] || [std hasPrefix:[fp stringByAppendingString:@"/"]]) {
+            NSInteger idx = [self mdzIndexOfTabRootClass:[RootViewControllerLocalFolders class]];
+            if (idx >= 0) {
+                self.selectedIndex = (NSUInteger)idx;
+            }
+            [self mdzRestoreLocalBrowseFolderId:item.identifier dirPath:full];
+            return YES;
+        }
+    }
+    NSString *docs = [ModizFileHelper getFullPathForFilePath:@"Documents"].stringByStandardizingPath;
+    if (docs.length && ([std isEqualToString:docs] || [std hasPrefix:[docs stringByAppendingString:@"/"]])) {
+        NSInteger idx = [self mdzIndexOfTabRootClass:[RootViewControllerLocalBrowser class]];
+        if (idx >= 0) {
+            self.selectedIndex = (NSUInteger)idx;
+        }
+        NSString *home = [ModizFileHelper getAppHomeDirectory].stringByStandardizingPath;
+        NSString *rel = std;
+        if (home.length && [std hasPrefix:[home stringByAppendingString:@"/"]]) {
+            rel = [std substringFromIndex:home.length + 1];
+        }
+        [self mdzRestoreLibraryBrowseDirPath:rel];
+        return YES;
+    }
+    return NO;
+}
+
+- (void)mdzRecoverEmptyMacBrowseIfNeeded {
+    if (!MDZIsMacDesktop() || sMDZMacBrowseRestoring) {
+        return;
+    }
+    RootViewControllerLocalBrowser *browser = [self mdzSelectedLocalBrowser];
+    if (!browser) {
+        return;
+    }
+    if ([browser mdzFileEntryCount] > 0) {
+        [browser mdzSelectPlayingFileIfVisible];
+        return;
+    }
+    if ([self mdzPlayingFilePath].length == 0) {
+        return;
+    }
+    sMDZMacBrowseRestoring = YES;
+    BOOL restored = [self mdzRestoreBrowseForPlayingFile];
+    sMDZMacBrowseRestoring = NO;
+    if (!restored) {
+        return;
+    }
+    [self mdzPinMacSidebarSearchBars];
+    RootViewControllerLocalBrowser *next = [self mdzSelectedLocalBrowser];
+    [next mdzForceReloadListingThen:nil];
+}
+
+- (void)mdzScheduleEmptyBrowseRecovery {
+    NSArray<NSNumber *> *delays = @[@0.8, @2.0, @4.0];
+    for (NSNumber *delay in delays) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [self mdzRecoverEmptyMacBrowseIfNeeded];
+        });
     }
 }
 
@@ -1157,6 +1581,7 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     [self mdzInstallMacSidebarSegmentIfNeeded];
     dispatch_async(dispatch_get_main_queue(), ^{
         [self mdzHideSystemTabOverlays];
+        [self mdzRestoreMacBrowseStateIfNeeded];
     });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self mdzHideSystemTabOverlays];

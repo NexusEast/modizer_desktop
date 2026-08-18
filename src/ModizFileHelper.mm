@@ -1012,6 +1012,9 @@ extern bool icloud_available;
 
 +(NSString*) getFullPathForFilePath:(NSString*)filePath {
     NSString *fullFilePath;
+    if (filePath.length == 0) {
+        return filePath;
+    }
 
     // Check CloudStorageManager for cloud paths first
     if ([[CloudStorageManager sharedManager] isCloudPath:filePath]) {

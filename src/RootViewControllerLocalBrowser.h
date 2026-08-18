@@ -137,5 +137,10 @@
 -(int) loadLocalFilesRandomPL:(NSMutableArray*)labels fullpaths:(NSMutableArray*)fullpaths;
 
 - (void) cancelPushed;
+- (void)mdzSelectPlayingFileIfVisible;
++ (BOOL)mdzMacListingAllowed;
++ (void)mdzMacAllowListing;
+- (NSInteger)mdzFileEntryCount;
+- (void)mdzForceReloadListingThen:(void (^)(void))done;
 
 @end

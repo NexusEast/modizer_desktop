@@ -260,6 +260,9 @@ bool mdz_macos_AOTplugin=false;
     [detailViewControlleriPhone enterBackground];
     [SettingsGenViewController backupSettings];
     [detailViewControlleriPhone saveSettings];
+#if TARGET_OS_MACCATALYST
+    [self.tabBarController mdzSaveMacBrowseState];
+#endif
     [downloadVC backupDownloadList];
     
     NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
@@ -302,6 +305,9 @@ bool mdz_macos_AOTplugin=false;
     // Ensure that settings are saved if closed by OS after resigning active
     [SettingsGenViewController backupSettings];
     [detailViewControlleriPhone saveSettings];
+#if TARGET_OS_MACCATALYST
+    [self.tabBarController mdzSaveMacBrowseState];
+#endif
     [downloadVC backupDownloadList];
 }
 
@@ -342,6 +348,9 @@ bool mdz_macos_AOTplugin=false;
     // Called as the scene transitions from the foreground to the background.
     [SettingsGenViewController backupSettings];
     [detailViewControlleriPhone saveSettings];
+#if TARGET_OS_MACCATALYST
+    [self.tabBarController mdzSaveMacBrowseState];
+#endif
     [downloadVC backupDownloadList];
     
     NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];

@@ -178,6 +178,7 @@ static void MDZSyncMacStatusItem(DetailViewControllerIphone *player);
 - (void)mdzSyncMacVisualizerFrames;
 - (void)mdzSyncMacCommandChrome;
 - (void)mdzBindMacTransportActions;
+- (void)mdzMacOglOverlayTapped:(UITapGestureRecognizer *)gestureRecognizer;
 - (void)mdzRefreshMacBottomPanels;
 - (void)mdzReloadMacSubsongTable;
 - (void)mdzHighlightMacCurrentSubsong;
@@ -867,6 +868,12 @@ bool sysMonitorIsActive;
 -(IBAction) oglButtonPushed {
     //check if short tap is active
     if (settings[GLOB_FXTapMenuMode].detail.mdz_switch.switch_value!=1) return;
+
+    if (is_macOS && !mOglViewIsHidden && m_oglView && !m_oglView.hidden) {
+        // Overlay sits on top of the GL view. A click must go to the FX menu,
+        // not hide the visualizer. Location is filled by mdzMacOglOverlayTapped.
+        return;
+    }
     
     if (mOglViewIsHidden) {
         mOglViewIsHidden=NO;
@@ -1527,6 +1534,9 @@ static float movePinchScale,movePinchScaleOld,movePinchAngle;
         if ((infoView.hidden==YES)) {
             m_oglView.hidden=NO;
         }
+    }
+    if (is_macOS) {
+        [self mdzSyncMacVisualizerFrames];
     }
 }
 
@@ -5573,7 +5583,10 @@ static void MDZApplySquareTransportStyle(UIButton *btn, UIImage *image) {
     m_oglView.frame = bounds;
     cover_viewAll.frame = bounds;
     oglButton.frame = bounds;
+    cover_viewAll.userInteractionEnabled = NO;
+    oglButton.userInteractionEnabled = YES;
     [host bringSubviewToFront:cover_viewAll];
+    [host bringSubviewToFront:m_oglView];
     [host bringSubviewToFront:oglButton];
 }
 
@@ -7544,6 +7557,23 @@ void pm_perfTest() {
                                                           action:@selector(glBtnLongPresstouch:)];
     // Add the gesture to the view
     [oglButton addGestureRecognizer:glBtnLongPressTouch];
+
+#if TARGET_OS_MACCATALYST
+    // oglButton covers the visualizer so the Mac pointer hits a UIButton, not
+    // the GL view. Drop the "tap to hide" action and forward input to ImGui.
+    [oglButton removeTarget:nil action:NULL forControlEvents:UIControlEventAllEvents];
+    UITapGestureRecognizer *oglBtnTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(mdzMacOglOverlayTapped:)];
+    oglBtnTap.cancelsTouchesInView = YES;
+    [oglButton addGestureRecognizer:oglBtnTap];
+    UIHoverGestureRecognizer *oglBtnHover = [[UIHoverGestureRecognizer alloc] initWithTarget:self action:@selector(glViewHoverGesture:)];
+    [oglButton addGestureRecognizer:oglBtnHover];
+    UIPanGestureRecognizer *oglBtnPan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(glViewPanGesture:)];
+    oglBtnPan.minimumNumberOfTouches = 1;
+    oglBtnPan.maximumNumberOfTouches = 1;
+    oglBtnPan.allowedScrollTypesMask = UIScrollTypeMaskAll;
+    [oglButton addGestureRecognizer:oglBtnPan];
+    oglButton.adjustsImageWhenHighlighted = NO;
+#endif
     
     // Create gesture recognizer
     UIPanGestureRecognizer *glViewPanGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(glViewPanGesture:)];
@@ -8577,6 +8607,24 @@ void updateSettingsSelectedSlot() {
     CGPoint pt=[gestureRecognizer locationInView:m_oglView];
     oglTapX=pt.x;
     oglTapY=pt.y;
+}
+
+-(void)mdzMacOglOverlayTapped:(UITapGestureRecognizer *)gestureRecognizer {
+    CGPoint pt = [gestureRecognizer locationInView:m_oglView];
+    oglTapX = pt.x;
+    oglTapY = pt.y;
+    moveWheelXPMenu = 0;
+    moveWheelYPMenu = 0;
+    if (mOglViewIsHidden) {
+        mOglViewIsHidden = NO;
+        if ([self computeActiveFX] == 0) {
+            pmenu_show = 1;
+            pmenu_fade = 0;
+        }
+        [self checkGLViewCanDisplay];
+        return;
+    }
+    mOglView1Tap = 1;
 }
 
 -(void) glViewPanGesture:(UIPanGestureRecognizer *)gestureRecognizer {
@@ -11469,6 +11517,7 @@ void drawTgtSlotPattern(int fxIdx,float x,float y,float w,float h,float ww,float
             mOglViewIsHidden=YES;
             pmenu_show=0;
             //pmenu_fade=0;
+            [self checkGLViewCanDisplay];
             if (settings[GLOB_FXFullscreen].detail.mdz_boolswitch.switch_value) {
                 settings[GLOB_FXFullscreen].detail.mdz_boolswitch.switch_value=0;
                 oglViewFullscreenChanged=1;

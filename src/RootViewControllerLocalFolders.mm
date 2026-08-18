@@ -214,11 +214,24 @@
         [self presentViewController:alert animated:YES completion:nil];
         return;
     }
+    RootViewControllerLocalBrowser *browser = [RootViewControllerLocalFolders mdzMakeBrowserAtPath:folder.path
+                                                                                             title:folder.name
+                                                                                             depth:1
+                                                                                            detail:self.detailViewController];
+    self.childController = browser;
+    self.navigationController.delegate = self;
+    [self.navigationController pushViewController:browser animated:YES];
+}
+
++ (RootViewControllerLocalBrowser *)mdzMakeBrowserAtPath:(NSString *)path
+                                                   title:(NSString *)title
+                                                   depth:(int)depth
+                                                  detail:(DetailViewControllerIphone *)detail {
     RootViewControllerLocalBrowser *browser = [[RootViewControllerLocalBrowser alloc] initWithNibName:@"PlaylistViewController" bundle:[NSBundle mainBundle]];
-    browser.title = folder.name;
-    browser.currentPath = folder.path;
-    browser->browse_depth = 1;
-    browser.detailViewController = self.detailViewController;
+    browser->browse_depth = depth;
+    browser.title = title;
+    browser.currentPath = path;
+    browser.detailViewController = detail;
     if (MDZIsMacDesktop()) {
         browser.edgesForExtendedLayout = UIRectEdgeAll;
         browser.extendedLayoutIncludesOpaqueBars = YES;
@@ -227,9 +240,7 @@
         browser.edgesForExtendedLayout = UIRectEdgeNone;
         browser.extendedLayoutIncludesOpaqueBars = NO;
     }
-    self.childController = browser;
-    self.navigationController.delegate = self;
-    [self.navigationController pushViewController:browser animated:YES];
+    return browser;
 }
 
 #pragma mark - UINavigationControllerDelegate
