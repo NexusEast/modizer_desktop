@@ -167,6 +167,7 @@ extern unsigned int m_voice_oscillo_pal3[8];
 #import "EQViewController.h"
 #import "CloudStorageManager.h"
 #import "MacPlayerLayout.h"
+#import <objc/message.h>
 
 static void MDZSyncMacStatusItem(DetailViewControllerIphone *player);
 
@@ -179,6 +180,8 @@ static void MDZSyncMacStatusItem(DetailViewControllerIphone *player);
 - (void)mdzSyncMacCommandChrome;
 - (void)mdzBindMacTransportActions;
 - (void)mdzMacOglOverlayTapped:(UITapGestureRecognizer *)gestureRecognizer;
+- (void)mdzMacShowCursor;
+- (void)mdzMacScheduleCursorHideIfNeeded;
 - (void)mdzRefreshMacBottomPanels;
 - (void)mdzReloadMacSubsongTable;
 - (void)mdzHighlightMacCurrentSubsong;
@@ -7814,14 +7817,27 @@ void pm_perfTest() {
 
 #if TARGET_OS_MACCATALYST
 
-- (void)mouseDidMove:(UIGestureRecognizer *)gesture {
-    // Montrer le curseur
-    [NSCursor unhide];
-    
-    // Annuler le timer précédent
+static BOOL sMDZCursorHidden = NO;
+#ifndef NSWindowStyleMaskFullScreen
+#define NSWindowStyleMaskFullScreen (1 << 14)
+#endif
+
+- (void)mdzMacShowCursor {
     [self.mouseHideTimer invalidate];
-    
-    // Créer un nouveau timer pour cacher après 2 secondes d'inactivité
+    self.mouseHideTimer = nil;
+    if (sMDZCursorHidden) {
+        [NSCursor unhide];
+        sMDZCursorHidden = NO;
+    }
+}
+
+- (void)mdzMacScheduleCursorHideIfNeeded {
+    [self.mouseHideTimer invalidate];
+    self.mouseHideTimer = nil;
+    if (pmenu_show || ![self isFullscreen]) {
+        [self mdzMacShowCursor];
+        return;
+    }
     self.mouseHideTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
                                                            target:self
                                                          selector:@selector(hideCursor)
@@ -7829,40 +7845,39 @@ void pm_perfTest() {
                                                           repeats:NO];
 }
 
+- (void)mouseDidMove:(UIGestureRecognizer *)gesture {
+    [self mdzMacScheduleCursorHideIfNeeded];
+}
+
 
 - (BOOL)isFullscreen {
-    if (@available(iOS 13.0, *)) {
-        UIWindowScene *windowScene = (UIWindowScene *)self.view.window.windowScene;
-        if (windowScene) {
-            // Sur Catalyst, utiliser directement les dimensions de la fenêtre
-            // et vérifier via la titlebar visibility
-            
-            CGRect windowFrame = windowScene.coordinateSpace.bounds;
-            
-            // Méthode 1: Vérifier si on a une titlebar cachée (iOS 16+)
-            //            if (@available(iOS 16.0, *)) {
-            //                if (windowScene.titlebar) {
-            //                    BOOL titlebarHidden = (windowScene.titlebar.titleVisibility == UITitlebarTitleVisibilityHidden);
-            //                    MDZILog("fs: titlebar hidden=%d", titlebarHidden);
-            //                    return titlebarHidden;
-            //                }
-            //            }
-            
-            // Méthode 2: Comparer avec la taille maximale disponible
-            // En plein écran, la fenêtre devrait être > 1500pts de large sur un écran standard
-            BOOL likelyFullscreen = (windowFrame.size.width > 1500.0 &&
-                                     windowFrame.size.height > 1000.0);
-            
-            //            MDZILog("fs: window=%f x %f, likely fullscreen=%d",windowFrame.size.width, windowFrame.size.height, likelyFullscreen);
-            
-            return likelyFullscreen;
+    Class nsAppClass = NSClassFromString(@"NSApplication");
+    if (!nsAppClass || ![nsAppClass respondsToSelector:@selector(sharedApplication)]) {
+        return NO;
+    }
+    id nsApp = ((id (*)(id, SEL))objc_msgSend)(nsAppClass, @selector(sharedApplication));
+    if (![nsApp respondsToSelector:@selector(windows)]) {
+        return NO;
+    }
+    NSArray *windows = ((id (*)(id, SEL))objc_msgSend)(nsApp, @selector(windows));
+    for (id nsWindow in windows) {
+        if (![nsWindow respondsToSelector:@selector(styleMask)]) {
+            continue;
+        }
+        NSUInteger mask = ((NSUInteger (*)(id, SEL))objc_msgSend)(nsWindow, @selector(styleMask));
+        if (mask & NSWindowStyleMaskFullScreen) {
+            return YES;
         }
     }
     return NO;
 }
 
 - (void)hideCursor {
-    if ([self isFullscreen]) [NSCursor hide];
+    if (sMDZCursorHidden || pmenu_show || ![self isFullscreen]) {
+        return;
+    }
+    [NSCursor hide];
+    sMDZCursorHidden = YES;
 }
 
 #endif
@@ -8622,9 +8637,15 @@ void updateSettingsSelectedSlot() {
             pmenu_fade = 0;
         }
         [self checkGLViewCanDisplay];
+#if TARGET_OS_MACCATALYST
+        [self mdzMacShowCursor];
+#endif
         return;
     }
     mOglView1Tap = 1;
+#if TARGET_OS_MACCATALYST
+    [self mdzMacShowCursor];
+#endif
 }
 
 -(void) glViewPanGesture:(UIPanGestureRecognizer *)gestureRecognizer {
@@ -8706,18 +8727,7 @@ void updateSettingsSelectedSlot() {
     }
     
 #if TARGET_OS_MACCATALYST
-    // Montrer le curseur
-        [NSCursor unhide];
-        
-        // Annuler le timer précédent
-        [self.mouseHideTimer invalidate];
-        
-        // Créer un nouveau timer pour cacher après 2 secondes d'inactivité
-        self.mouseHideTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
-                                                               target:self
-                                                             selector:@selector(hideCursor)
-                                                             userInfo:nil
-                                                              repeats:NO];
+    [self mdzMacScheduleCursorHideIfNeeded];
 #endif
 }
 
@@ -8744,18 +8754,7 @@ void updateSettingsSelectedSlot() {
     }
     
 #if TARGET_OS_MACCATALYST
-    // Montrer le curseur
-        [NSCursor unhide];
-        
-        // Annuler le timer précédent
-        [self.mouseHideTimer invalidate];
-        
-        // Créer un nouveau timer pour cacher après 2 secondes d'inactivité
-        self.mouseHideTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
-                                                               target:self
-                                                             selector:@selector(hideCursor)
-                                                             userInfo:nil
-                                                              repeats:NO];
+    [self mdzMacScheduleCursorHideIfNeeded];
 #endif
 }
 
