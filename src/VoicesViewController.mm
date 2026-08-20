@@ -73,6 +73,7 @@ extern volatile t_settings settings[MAX_SETTINGS];
     pbRatioSwitch=NULL;
     pbRatioValue=NULL;
     pbRatioLblValue=NULL;
+    dutySwapSwitch=NULL;
     
     self.view.backgroundColor=[UIColor colorWithWhite:0 alpha:0.2];
     self.scrollView.backgroundColor=[UIColor colorWithWhite:0 alpha:0];
@@ -276,6 +277,16 @@ extern volatile t_settings settings[MAX_SETTINGS];
     }
 }
 
+-(void)pushedDutySwapSwitch:(id)sender {
+    BOOL enabled=[detailViewController.mplayer getNesDutySwap];
+    [detailViewController.mplayer setNesDutySwap:!enabled];
+    BOOL on=[detailViewController.mplayer getNesDutySwap];
+    [dutySwapSwitch setType:(on?BButtonTypePrimary:BButtonTypeInverse)];
+    [dutySwapSwitch setTitle:NSLocalizedString(@"Duty swap",@"") forState:UIControlStateNormal];
+    [dutySwapSwitch addAwesomeIcon:FAIconExchange beforeTitle:true];
+    [SettingsGenViewController backupSettings];
+}
+
 -(void)pushedPBRatioSwitch:(id)sender {
     if (settings[GLOB_PBRATIO_ONOFF].detail.mdz_boolswitch.switch_value) {
         settings[GLOB_PBRATIO_ONOFF].detail.mdz_boolswitch.switch_value=0;
@@ -358,6 +369,12 @@ extern volatile t_settings settings[MAX_SETTINGS];
             ypos+=32+8;
         }
         
+        if (dutySwapSwitch) {
+            ypos+=8;
+            dutySwapSwitch.frame=CGRectMake(xpos,ypos,130,32);
+            ypos+=32+8;
+        }
+        
         sep2.frame=CGRectMake(inset, ypos, innerW, 1);
         sep2.backgroundColor = sepColor;
         
@@ -428,6 +445,7 @@ extern volatile t_settings settings[MAX_SETTINGS];
     if (pbRatioSwitch) [pbRatioSwitch removeFromSuperview];
     if (pbRatioValue) [pbRatioValue removeFromSuperview];
     if (pbRatioLblValue) [pbRatioLblValue removeFromSuperview];
+    if (dutySwapSwitch) [dutySwapSwitch removeFromSuperview];
     
     if (sep1) [sep1 removeFromSuperview];
     if (sep2) [sep2 removeFromSuperview];
@@ -442,6 +460,7 @@ extern volatile t_settings settings[MAX_SETTINGS];
     pbRatioSwitch=NULL;
     pbRatioValue=NULL;
     pbRatioLblValue=NULL;
+    dutySwapSwitch=NULL;
 }
 
 - (void) resetVoicesButtons {
@@ -503,6 +522,15 @@ extern volatile t_settings settings[MAX_SETTINGS];
                 [self.scrollView addSubview:pbRatioValue];
                 
                 
+            }
+            
+            if ([detailViewController.mplayer isNesDutySwapSupported]) {
+                BOOL dutyOn=[detailViewController.mplayer getNesDutySwap];
+                dutySwapSwitch=[[BButton alloc] initWithFrame:CGRectMake(0,0,32,32) type:(dutyOn?BButtonTypePrimary:BButtonTypeInverse) style:BButtonStyleBootstrapV2 icon:FAIconExchange fontSize:12];
+                [dutySwapSwitch addTarget:self action:@selector(pushedDutySwapSwitch:) forControlEvents:UIControlEventTouchUpInside];
+                [dutySwapSwitch setTitle:NSLocalizedString(@"Duty swap",@"") forState:UIControlStateNormal];
+                [dutySwapSwitch addAwesomeIcon:FAIconExchange beforeTitle:true];
+                [self.scrollView addSubview:dutySwapSwitch];
             }
             
             sep2 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 1)];

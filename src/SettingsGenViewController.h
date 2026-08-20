@@ -148,6 +148,7 @@ enum MDZ_SETTINGS {
         GME_EQ_ONOFF,
         GME_EQ_BASS,
         GME_EQ_TREBLE,
+        GME_NSF_DUTY_SWAP,
     
         MDZ_SETTINGS_FAMILY_GSF,
         GSF_SOUNDQUALITY,
@@ -181,7 +182,7 @@ enum MDZ_SETTINGS {
         NSFPLAY_APU_OPTION0,    //unmute on reset
         NSFPLAY_APU_OPTION1,    //phase reset
         NSFPLAY_APU_OPTION2,    //nonlinear mixing
-        NSFPLAY_APU_OPTION3,    //Swap duty 1/2
+        NSFPLAY_APU_OPTION3,    //Swap pulse duty 1/2 (25% <-> 50%, Dendy/famiclone)
         NSFPLAY_APU_OPTION4,    //Initialize sweep unmute
         NSFPLAY_DMC_OPTION0,    //enable $4011 writes
         NSFPLAY_DMC_OPTION1,    //enable periodic noise

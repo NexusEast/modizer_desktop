@@ -15,6 +15,13 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
+volatile int gme_nes_swap_duty_cycles = 0;
+
+void gme_internal_set_nes_duty_swap( int enable )
+{
+	gme_nes_swap_duty_cycles = enable ? 1 : 0;
+}
+
 // Nes_Osc
 
 void Nes_Osc::clock_length( int halt_mask )
@@ -124,6 +131,10 @@ void Nes_Square::run( nes_time_t time, nes_time_t end_time )
 	{
 		// handle duty select
 		int duty_select = (regs [0] >> 6) & 3;
+		if ( swap_duty_cycles || gme_nes_swap_duty_cycles ) {
+			if ( duty_select == 1 ) duty_select = 2;
+			else if ( duty_select == 2 ) duty_select = 1;
+		}
 		int duty = 1 << duty_select; // 1, 2, 4, 2
 		int amp = 0;
 		if ( duty_select == 3 ) {

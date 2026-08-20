@@ -157,6 +157,11 @@ extern gme_type_t const gme_nsf_type = &gme_nsf_type_;
 
 // Setup
 
+void Nsf_Emu::set_nes_duty_swap_( bool enable )
+{
+	apu.set_swap_duty_cycles( enable );
+}
+
 void Nsf_Emu::set_tempo_( double t )
 {
 	unsigned playback_rate = get_le16( header_.ntsc_speed );

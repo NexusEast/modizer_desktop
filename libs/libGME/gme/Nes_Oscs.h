@@ -9,6 +9,9 @@
 
 class Nes_Apu;
 
+void gme_internal_set_nes_duty_swap( int enable );
+extern volatile int gme_nes_swap_duty_cycles;
+
 struct Nes_Osc
 {
 	unsigned char regs [4];
@@ -58,8 +61,9 @@ struct Nes_Square : Nes_Envelope
 	
 	typedef Blip_Synth<blip_good_quality,1> Synth;
 	Synth const& synth; // shared between squares
+	bool swap_duty_cycles; // famiclone/Dendy: swap duty 1 (25%) and 2 (50%)
 	
-	Nes_Square( Synth const* s ) : synth( *s ) { }
+	Nes_Square( Synth const* s ) : synth( *s ), swap_duty_cycles( false ) { }
 	
 	void clock_sweep( int adjust );
 	void run( nes_time_t, nes_time_t );

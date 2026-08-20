@@ -6162,6 +6162,7 @@ void processFadeOut(short int *buffer, int sample_count, int voice_factor) {
                                 memset(m_voice_prev_current_ptr,0,sizeof(m_voice_current_ptr));
                                 
                                 gme_start_track(gme_emu,mod_currentsub);
+                                [self applyNesDutySwapLive];
                                 if (gme_track_info( gme_emu, &gme_info, mod_currentsub )==0) {
                                     strcpy(gmetype,gme_info->system);
                                     iModuleLength=gme_info->play_length;
@@ -6563,6 +6564,7 @@ void processFadeOut(short int *buffer, int sample_count, int voice_factor) {
                         if (mPlayType==MMP_GME) {  //GME
                             nbBytes=0;
                             m_voice_current_system=-1;
+                            [self applyNesDutySwapLive];
                             if (gme_track_ended(gme_emu)) {
                                 if (mLoopMode==1) {
                                     
@@ -6570,6 +6572,7 @@ void processFadeOut(short int *buffer, int sample_count, int voice_factor) {
                                     memset(m_voice_prev_current_ptr,0,sizeof(m_voice_current_ptr));
                                     
                                     gme_start_track(gme_emu,mod_currentsub);
+                                    [self applyNesDutySwapLive];
                                     gme_play( gme_emu, SOUND_BUFFER_SIZE_SAMPLE*2, buffer_ana[buffer_ana_gen_ofs] );
                                     nbBytes=SOUND_BUFFER_SIZE_SAMPLE*2*2;
                                     if (settings[GLOB_PBRATIO_ONOFF].detail.mdz_boolswitch.switch_value) mCurrentSamples+=SOUND_BUFFER_SIZE_SAMPLE*settings[GLOB_PBRATIO].detail.mdz_slider.slider_value;
@@ -8240,6 +8243,8 @@ void processFadeOut(short int *buffer, int sample_count, int voice_factor) {
                         }
                         if (mPlayType==MMP_NSFPLAY) {
                             
+                            [self applyNesDutySwapLive];
+                            
                             for (int j=0;j<(m_genNumVoicesChannels<SOUND_MAXVOICES_BUFFER_FX?m_genNumVoicesChannels:SOUND_MAXVOICES_BUFFER_FX);j++) {
                                 memset(m_voice_buff[j],0,SOUND_BUFFER_SIZE_SAMPLE);
                                 m_voice_current_ptr[j]=0;
@@ -8262,6 +8267,7 @@ void processFadeOut(short int *buffer, int sample_count, int voice_factor) {
                                     //loop
                                     //reset NSF
                                     nsfPlayer->Reset();
+                                    [self applyNesDutySwapLive];
                                     mCurrentSamples=0;
                                     iCurrentTime=0;
                                     mdzSilentBufferCount=0;
@@ -15213,6 +15219,7 @@ static void vgm_set_dev_option(PlayerBase *player, UINT8 devId, UINT32 coreOpts)
             mPlayType=0;
             return -4;
         }
+        [self applyNesDutySwapLive];
         
         int m3uPlayLength=0;
         char *title=NULL;
@@ -16560,6 +16567,7 @@ extern bool icloud_available;
                 memset(m_voice_prev_current_ptr,0,sizeof(m_voice_current_ptr));
                 
                 gme_start_track(gme_emu,subsong);
+                [self applyNesDutySwapLive];
                 mod_currentsub=subsong;
                 if (gme_track_info( gme_emu, &gme_info, mod_currentsub )==0) {
                     iModuleLength=gme_info->play_length;
@@ -18135,8 +18143,46 @@ extern "C" void adjust_amplification(void);
         
         if(settings[GLOB_PBRATIO_ONOFF].detail.mdz_boolswitch.switch_value) gme_set_tempo(gme_emu, settings[GLOB_PBRATIO].detail.mdz_slider.slider_value);
         else gme_set_tempo(gme_emu, 1);
+        
+        gme_set_nes_duty_swap(gme_emu, settings[GME_NSF_DUTY_SWAP].detail.mdz_boolswitch.switch_value);
     }
     
+}
+
+-(BOOL) isNesDutySwapSupported {
+    if (mPlayType==MMP_NSFPLAY) return YES;
+    if (mPlayType==MMP_GME && gme_emu) {
+        gme_type_t t=gme_type(gme_emu);
+        return (t==gme_nsf_type || t==gme_nsfe_type);
+    }
+    return NO;
+}
+
+-(BOOL) getNesDutySwap {
+    if (mPlayType==MMP_NSFPLAY) return settings[NSFPLAY_APU_OPTION3].detail.mdz_boolswitch.switch_value?YES:NO;
+    if (mPlayType==MMP_GME) return settings[GME_NSF_DUTY_SWAP].detail.mdz_boolswitch.switch_value?YES:NO;
+    return NO;
+}
+
+-(void) setNesDutySwap:(BOOL)enable {
+    int val=enable?1:0;
+    settings[NSFPLAY_APU_OPTION3].detail.mdz_boolswitch.switch_value=val;
+    settings[GME_NSF_DUTY_SWAP].detail.mdz_boolswitch.switch_value=val;
+    if (nsfPlayerConfig) {
+        (*nsfPlayerConfig)["APU1_OPTION3"]=val;
+    }
+    [self applyNesDutySwapLive];
+}
+
+-(void) applyNesDutySwapLive {
+    int nsfplay_val=settings[NSFPLAY_APU_OPTION3].detail.mdz_boolswitch.switch_value;
+    int gme_val=settings[GME_NSF_DUTY_SWAP].detail.mdz_boolswitch.switch_value;
+    if (nsfPlayer && nsfPlayer->apu) {
+        nsfPlayer->apu->SetOption(xgm::NES_APU::OPT_DUTY_SWAP, nsfplay_val);
+    }
+    if (gme_emu) {
+        gme_set_nes_duty_swap(gme_emu, gme_val);
+    }
 }
 
 ///////////////////////////

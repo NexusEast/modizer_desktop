@@ -59,5 +59,6 @@ gme_spc_type
 gme_vgm_type
 gme_vgz_type
 gme_disable_echo
+gme_set_nes_duty_swap
 gme_set_fade_msecs
 gme_rsn_type

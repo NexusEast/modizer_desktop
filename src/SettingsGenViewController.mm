@@ -2945,11 +2945,20 @@ void optNSFPLAYChangedC(id param) {
     settings[GME_STEREO_PANNING].detail.mdz_slider.slider_min_value=0;
     settings[GME_STEREO_PANNING].detail.mdz_slider.slider_max_value=1;
     
+    SETTINGS_ID_DEF(GME_NSF_DUTY_SWAP)
+    settings[GME_NSF_DUTY_SWAP].type=MDZ_BOOLSWITCH;
+    settings[GME_NSF_DUTY_SWAP].label=(char*)"NSF swap duty 1/2";
+    settings[GME_NSF_DUTY_SWAP].description=(char*)"Swap NES pulse duty 25% and 50% (Dendy / famiclone APU). NSF/NSFE only.";
+    settings[GME_NSF_DUTY_SWAP].family=MDZ_SETTINGS_FAMILY_GME;
+    settings[GME_NSF_DUTY_SWAP].sub_family=0;
+    settings[GME_NSF_DUTY_SWAP].callback=&optGMEChangedC;
+    
     settings[GME_IGNORESILENCE].detail.mdz_slider.slider_default_value=0;
     settings[GME_EQ_ONOFF].detail.mdz_boolswitch.switch_default_value=0;
     settings[GME_EQ_BASS].detail.mdz_slider.slider_default_value=4.2-1.9;
     settings[GME_EQ_TREBLE].detail.mdz_slider.slider_default_value=-14;
     settings[GME_STEREO_PANNING].detail.mdz_slider.slider_default_value=0.7;
+    settings[GME_NSF_DUTY_SWAP].detail.mdz_boolswitch.switch_default_value=0;
     
     /////////////////////////////////////
     //GSF
@@ -3113,7 +3122,7 @@ void optNSFPLAYChangedC(id param) {
     SETTINGS_ID_DEF(NSFPLAY_APU_OPTION3)
     settings[NSFPLAY_APU_OPTION3].type=MDZ_BOOLSWITCH;
     settings[NSFPLAY_APU_OPTION3].label=(char*)"APU swap duty 1/2";
-    settings[NSFPLAY_APU_OPTION3].description=NULL;
+    settings[NSFPLAY_APU_OPTION3].description=(char*)"Swap NES pulse duty 25% and 50% (Dendy / famiclone APU)";
     settings[NSFPLAY_APU_OPTION3].family=MDZ_SETTINGS_FAMILY_NSFPLAY;
     settings[NSFPLAY_APU_OPTION3].sub_family=0;
     settings[NSFPLAY_APU_OPTION3].callback=&optNSFPLAYChangedC;

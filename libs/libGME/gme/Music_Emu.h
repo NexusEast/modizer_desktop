@@ -97,6 +97,9 @@ public:
 	// Disables echo effect at SPC files
 	void disable_echo( bool disable );
 
+	// Swap NES APU pulse duty 1 and 2 (25% <-> 50%). No effect for non-NSF types.
+	void set_nes_duty_swap( bool enable );
+
 	// Change overall output amplitude, where 1.0 results in minimal clamping.
 	// Must be called before set_sample_rate().
 	void set_gain( double );
@@ -151,6 +154,7 @@ protected:
 	virtual void enable_accuracy_( bool /* enable */ ) { }
 	virtual void mute_voices_( int mask ) = 0;
 	virtual void disable_echo_( bool /* disable */);
+	virtual void set_nes_duty_swap_( bool /* enable */ ) { }
 	virtual void set_tempo_( double ) = 0;
 	virtual blargg_err_t start_track_( int ) = 0; // tempo is set before this
 	virtual blargg_err_t play_( long count, sample_t* out ) = 0;

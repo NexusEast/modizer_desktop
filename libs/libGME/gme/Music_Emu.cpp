@@ -142,6 +142,11 @@ void Music_Emu::disable_echo( bool disable )
 	disable_echo_( disable );
 }
 
+void Music_Emu::set_nes_duty_swap( bool enable )
+{
+	set_nes_duty_swap_( enable );
+}
+
 void Music_Emu::set_tempo( double t )
 {
 	require( sample_rate() ); // sample rate must be set first

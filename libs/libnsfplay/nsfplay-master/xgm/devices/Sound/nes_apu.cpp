@@ -109,7 +109,13 @@ namespace xgm
         )
     {
         int v = envelope_disable[i] ? volume[i] : envelope_counter[i];
-        ret = sqrtbl[duty[i]][sphase[i]] ? v : 0;
+        int d = duty[i];
+        if (duty_swap)
+        {
+            if      (d == 1) d = 2;
+            else if (d == 2) d = 1;
+        }
+        ret = sqrtbl[d][sphase[i]] ? v : 0;
     }
     
     return ret;
@@ -137,7 +143,7 @@ namespace xgm
     out[1] = calc_sqr(1, clocks);
   }
 
-  // ê∂ê¨Ç≥ÇÍÇÈîgå`ÇÃêUïùÇÕ0-8191
+  // Square waveform amplitude range 0-8191
   UINT32 NES_APU::Render (INT32 b[2])
   {
     out[0] = (mask & 1) ? 0 : out[0];
@@ -192,6 +198,7 @@ namespace xgm
     option[OPT_NONLINEAR_MIXER] = true;
     option[OPT_DUTY_SWAP] = false;
     option[OPT_NEGATE_SWEEP_INIT] = false;
+    duty_swap = 0;
 
     square_table[0] = 0;
     for(int i=1;i<32;i++) 
@@ -259,6 +266,7 @@ namespace xgm
   void NES_APU::SetOption (int id, int val)
   {
     if(id<OPT_END) option[id] = val;
+    if (id == OPT_DUTY_SWAP) duty_swap = val ? 1 : 0;
   }
 
   void NES_APU::SetClock (double c)
@@ -338,11 +346,6 @@ namespace xgm
         envelope_loop[ch] = (val >> 5) & 1;
         envelope_div_period[ch] = (val & 15);
         duty[ch] = (val >> 6) & 3;
-        if (option[OPT_DUTY_SWAP])
-        {
-            if      (duty[ch] == 1) duty[ch] = 2;
-            else if (duty[ch] == 2) duty[ch] = 1;
-        }
         break;
 
       case 0x1:

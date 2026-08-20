@@ -22,7 +22,8 @@ namespace xgm
     { SQR0_MASK = 1, SQR1_MASK = 2, };
 
   protected:
-    int option[OPT_END];        // 各種オプション
+    int option[OPT_END];
+    volatile int duty_swap;     // live-toggled; read every sample in calc_sqr
     int mask;
     INT32 sm[2][2];
 

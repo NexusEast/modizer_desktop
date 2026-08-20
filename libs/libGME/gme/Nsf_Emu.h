@@ -61,6 +61,7 @@ protected:
 	void set_voice( int, Blip_Buffer*, Blip_Buffer*, Blip_Buffer* );
 	void update_eq( blip_eq_t const& );
 	void unload();
+	void set_nes_duty_swap_( bool enable ) override;
 protected:
 	enum { bank_count = 8 };
 	byte initial_banks [bank_count];

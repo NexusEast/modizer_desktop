@@ -386,6 +386,10 @@ extern "C" {
 -(void) optHC_ResampleQuality:(unsigned int)val;
 
 -(void) optGME_Update;
+-(BOOL) isNesDutySwapSupported;
+-(BOOL) getNesDutySwap;
+-(void) setNesDutySwap:(BOOL)enable;
+-(void) applyNesDutySwapLive;
 
 -(void) optGSF_UpdateParam;
 

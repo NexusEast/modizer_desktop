@@ -57,6 +57,9 @@ public:
 	void save_state( apu_state_t* out ) const;
 	void load_state( apu_state_t const& );
 	
+	// Swap pulse duty 1 and 2 (25% <-> 50%), matching Dendy/famiclone APU
+	void set_swap_duty_cycles( bool enable );
+	
 	// Set overall volume (default is 1.0)
 	void volume( double );
 	
@@ -137,6 +140,13 @@ private:
 	// TODO: remove
 	friend class Nes_Core;
 };
+
+inline void Nes_Apu::set_swap_duty_cycles( bool enable )
+{
+	square1.swap_duty_cycles = enable;
+	square2.swap_duty_cycles = enable;
+	gme_internal_set_nes_duty_swap( enable ? 1 : 0 );
+}
 
 inline void Nes_Apu::osc_output( int osc, Blip_Buffer* buf )
 {

@@ -183,6 +183,10 @@ BLARGG_EXPORT void gme_mute_voices( Music_Emu*, int muting_mask );
 /* Available since 0.6.4 */
 BLARGG_EXPORT void gme_disable_echo( Music_Emu*, int disable );
 
+/* Swap NES APU pulse duty 1 and 2 (25% <-> 50%), matching Dendy/famiclone hardware.
+ * No effect for non-NSF/NSFE types. */
+BLARGG_EXPORT void gme_set_nes_duty_swap( Music_Emu*, int enable );
+
 /* Frequency equalizer parameters (see gme.txt) */
 /* Implementers: If modified, also adjust Music_Emu::make_equalizer as needed */
 typedef struct gme_equalizer_t

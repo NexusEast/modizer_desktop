@@ -27,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
     BButton *pbRatioSwitch;
     UISlider *pbRatioValue;
     UILabel *pbRatioLblValue;
+    BButton *dutySwapSwitch;
     
     NSString *currentPlayingFile;
     
