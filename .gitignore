@@ -10,6 +10,11 @@
 # certificates
 *.p12
 
+# Desktop release outputs and local secrets
+/build/
+/dist/
+/desktop/secrets.env
+
 #Xcode files
 #*.xcuserstate
 #*.xcscheme
