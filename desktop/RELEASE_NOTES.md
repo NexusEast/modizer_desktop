@@ -1,9 +1,10 @@
-Mac desktop update on top of 4.6.2 (Mac Catalyst, Apple Silicon).
+Mac desktop update on top of 4.6.3 (Mac Catalyst, Apple Silicon).
 
-## New
-- Duty swap toggle in the Voices panel while playing NSF/NSFE
-- Swaps NES pulse duty 25% and 50% (Dendy / famiclone APU)
-- Applies live for NSFPlay and GME without reloading the file
+## Fixes
+- Creating playlists works again (the user database was an empty SQLite file with no tables)
+- The heart button now saves to Favorites
+- Playlist names show correctly in Add to Playlist (including Chinese names)
+- The sidebar back button appears immediately on Favorites and other pages without a search bar
 
 ## Requirements
 - Apple Silicon Mac (arm64)
