@@ -149,7 +149,23 @@ load_secrets() {
   local need_notary=1
   [[ "${SKIP_NOTARIZE:-0}" -eq 1 ]] && need_notary=0
 
-  if [[ -z "${APPLE_ID:-}" || -z "${TEAM_ID:-}" || ( "$need_notary" -eq 1 && -z "${NOTARY_PASSWORD:-}" ) ]]; then
+  # Prefer a saved notarytool keychain profile over prompting for secrets.env.
+  if [[ "$need_notary" -eq 1 && -z "${NOTARY_PASSWORD:-}" ]]; then
+    local candidate
+    for candidate in "${NOTARY_KEYCHAIN_PROFILE:-}" modizer-notary AC_PASSWORD; do
+      [[ -n "$candidate" ]] || continue
+      if xcrun notarytool history --keychain-profile "$candidate" >/dev/null 2>&1; then
+        NOTARY_KEYCHAIN_PROFILE="$candidate"
+        log "Using notary keychain profile $NOTARY_KEYCHAIN_PROFILE"
+        break
+      fi
+    done
+  fi
+
+  local have_notary=0
+  [[ -n "${NOTARY_PASSWORD:-}" || -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]] && have_notary=1
+
+  if [[ -z "${TEAM_ID:-}" || ( "$need_notary" -eq 1 && "$have_notary" -eq 0 && -z "${APPLE_ID:-}" ) ]]; then
     echo "No usable desktop/secrets.env yet. Enter values once; they are saved locally."
     echo "Use an app-specific password from appleid.apple.com, not the Apple ID password."
     echo
@@ -157,11 +173,11 @@ load_secrets() {
     if [[ -z "${TEAM_ID:-}" ]]; then
       TEAM_ID="$(prompt_tty "Team ID: ")"
     fi
-    if [[ "$need_notary" -eq 1 && -z "${NOTARY_PASSWORD:-}" ]]; then
+    if [[ "$need_notary" -eq 1 && "$have_notary" -eq 0 ]]; then
       NOTARY_PASSWORD="$(prompt_tty "App-specific password (hidden): " 1)"
     fi
     [[ -n "$APPLE_ID" && -n "$TEAM_ID" ]] || die "Apple ID and Team ID are required"
-    if [[ "$need_notary" -eq 1 && -z "${NOTARY_PASSWORD:-}" ]]; then
+    if [[ "$need_notary" -eq 1 && -z "${NOTARY_PASSWORD:-}" && -z "${NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
       die "app-specific password is required unless --skip-notarize"
     fi
 
@@ -171,6 +187,7 @@ APPLE_ID=${APPLE_ID}
 TEAM_ID=${TEAM_ID}
 NOTARY_PASSWORD=${NOTARY_PASSWORD:-}
 GITHUB_REPO=${GITHUB_REPO}
+NOTARY_KEYCHAIN_PROFILE=${NOTARY_KEYCHAIN_PROFILE:-}
 EOF
     chmod 600 "$SECRETS_FILE"
     log "Wrote $SECRETS_FILE (gitignored)"
@@ -302,11 +319,17 @@ notarize_dmg() {
     return 0
   fi
   log "Submitting DMG to Apple notary service"
-  xcrun notarytool submit "$dmg" \
-    --apple-id "$APPLE_ID" \
-    --password "$NOTARY_PASSWORD" \
-    --team-id "$TEAM_ID" \
-    --wait
+  if [[ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
+    xcrun notarytool submit "$dmg" \
+      --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" \
+      --wait
+  else
+    xcrun notarytool submit "$dmg" \
+      --apple-id "$APPLE_ID" \
+      --password "$NOTARY_PASSWORD" \
+      --team-id "$TEAM_ID" \
+      --wait
+  fi
   xcrun stapler staple "$dmg"
   xcrun stapler validate "$dmg"
 }
