@@ -16,6 +16,10 @@ extern bool icloud_available;
 
 #include <sys/sysctl.h>
 #include <sys/xattr.h>
+#include <pthread.h>
+#include "sqlite3.h"
+
+extern pthread_mutex_t db_mutex;
 
 //GME
 #include "gme.h"
@@ -1008,6 +1012,164 @@ extern bool icloud_available;
         // On iOS, NSHomeDirectory() always returns the correct app container
         return NSHomeDirectory();
     #endif
+}
+
++(NSString *)getUserDatabasePath {
+    NSString *docs = [[self getAppHomeDirectory] stringByAppendingPathComponent:@"Documents"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:docs withIntermediateDirectories:YES attributes:nil error:nil];
+    return [docs stringByAppendingPathComponent:DATABASENAME_USER];
+}
+
++(void)debugLog:(NSString *)message {
+    if (message.length == 0) {
+        return;
+    }
+    NSLog(@"[MDZ] %@", message);
+    MDZELog("%s", [message UTF8String]);
+    NSString *docs = [[self getAppHomeDirectory] stringByAppendingPathComponent:@"Documents"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:docs withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *path = [docs stringByAppendingPathComponent:@"mdz_debug.log"];
+    NSString *line = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], message];
+    @synchronized (self) {
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
+        if (!fh) {
+            [line writeToFile:path atomically:NO encoding:NSUTF8StringEncoding error:nil];
+            return;
+        }
+        @try {
+            [fh seekToEndOfFile];
+            NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
+            if (data) {
+                [fh writeData:data];
+            }
+        } @finally {
+            [fh closeFile];
+        }
+    }
+}
+
+static BOOL MDZSqliteHasTable(sqlite3 *db, const char *name) {
+    if (!db || !name) {
+        return NO;
+    }
+    sqlite3_stmt *stmt = NULL;
+    BOOL ok = NO;
+    char *sql = sqlite3_mprintf("SELECT 1 FROM sqlite_master WHERE type='table' AND name=%Q LIMIT 1", name);
+    if (!sql) {
+        return NO;
+    }
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            ok = YES;
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_free(sql);
+    return ok;
+}
+
++(void)mdzRemoveUserDatabaseSidecars:(NSString *)path {
+    if (path.length == 0) {
+        return;
+    }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm removeItemAtPath:path error:nil];
+    [fm removeItemAtPath:[path stringByAppendingString:@"-wal"] error:nil];
+    [fm removeItemAtPath:[path stringByAppendingString:@"-shm"] error:nil];
+}
+
++(void)mdzCreateUserDatabaseSchema:(sqlite3 *)db {
+    if (!db) {
+        return;
+    }
+    const char *ddl =
+        "CREATE TABLE IF NOT EXISTS user_stats (name text,fullpath text, play_count integer, rating integer,avg_rating int,length int,channels int,songs int,mod_type int);"
+        "CREATE TABLE IF NOT EXISTS playlists (id integer primary key autoincrement, name text, num_files integer);"
+        "CREATE TABLE IF NOT EXISTS playlists_entries (id_playlist integer,name text,fullpath text);"
+        "CREATE TABLE IF NOT EXISTS songlength_user (id_md5 text,track_nb int,song_length int);"
+        "CREATE TABLE IF NOT EXISTS version (major integer,minor integer);"
+        "CREATE INDEX IF NOT EXISTS idx_playlists_entries_id on playlists_entries (id_playlist);"
+        "CREATE INDEX IF NOT EXISTS idx_user_stats_fullpath on user_stats (fullpath);"
+        "CREATE INDEX IF NOT EXISTS idx_songlength_user_id_md5 on songlength_user (id_md5);";
+    char *errmsg = NULL;
+    int rc = sqlite3_exec(db, ddl, NULL, NULL, &errmsg);
+    [self debugLog:[NSString stringWithFormat:@"ensureDB createSchema rc=%d errmsg=%s", rc, errmsg ? errmsg : ""]];
+    sqlite3_free(errmsg);
+    char verSql[256];
+    snprintf(verSql, sizeof(verSql),
+             "INSERT INTO version (major,minor) SELECT %d,%d WHERE NOT EXISTS (SELECT 1 FROM version);",
+             VERSION_MAJOR, VERSION_MINOR);
+    sqlite3_exec(db, verSql, NULL, NULL, NULL);
+}
+
++(int)mdzUserDatabaseSchemaStateAtPath:(NSString *)path {
+    sqlite3 *db = NULL;
+    int rc = sqlite3_open([path UTF8String], &db);
+    if (rc != SQLITE_OK) {
+        [self debugLog:[NSString stringWithFormat:@"ensureDB inspect open rc=%d errmsg=%s", rc, db ? sqlite3_errmsg(db) : "nodb"]];
+        if (db) {
+            sqlite3_close(db);
+        }
+        return -1;
+    }
+    BOOL hasSchema = MDZSqliteHasTable(db, "playlists") && MDZSqliteHasTable(db, "user_stats");
+    sqlite3_close(db);
+    return hasSchema ? 1 : 0;
+}
+
++(void)ensureUserDatabaseReady {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        pthread_mutex_lock(&db_mutex);
+        NSString *path = [self getUserDatabasePath];
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *searchDocs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+        NSString *bundled = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:DATABASENAME_USER];
+        NSDictionary *attrs = [fm attributesOfItemAtPath:path error:nil];
+        [self debugLog:[NSString stringWithFormat:@"ensureDB start path=%@ exists=%d size=%llu home=%@ nshome=%@ searchDocs=%@ bundle=%@ bundleExists=%d",
+                        path,
+                        [fm fileExistsAtPath:path],
+                        (unsigned long long)[attrs fileSize],
+                        [self getAppHomeDirectory],
+                        NSHomeDirectory(),
+                        searchDocs,
+                        bundled,
+                        [fm fileExistsAtPath:bundled]]];
+
+        int schemaState = 0;
+        if ([fm fileExistsAtPath:path]) {
+            schemaState = [self mdzUserDatabaseSchemaStateAtPath:path];
+        }
+        [self debugLog:[NSString stringWithFormat:@"ensureDB schemaState=%d (1=ok 0=missing -1=unreadable)", schemaState]];
+
+        if (schemaState == 0) {
+            NSError *copyErr = nil;
+            [self mdzRemoveUserDatabaseSidecars:path];
+            BOOL copied = NO;
+            if ([fm fileExistsAtPath:bundled]) {
+                copied = [fm copyItemAtPath:bundled toPath:path error:&copyErr];
+            }
+            [self debugLog:[NSString stringWithFormat:@"ensureDB copy bundled=%d err=%@", copied, copyErr]];
+            schemaState = [self mdzUserDatabaseSchemaStateAtPath:path];
+            if (schemaState != 1) {
+                sqlite3 *db = NULL;
+                int openRc = sqlite3_open([path UTF8String], &db);
+                [self debugLog:[NSString stringWithFormat:@"ensureDB fallback open rc=%d errmsg=%s",
+                                openRc, db ? sqlite3_errmsg(db) : "nodb"]];
+                if (openRc == SQLITE_OK) {
+                    [self mdzCreateUserDatabaseSchema:db];
+                    schemaState = (MDZSqliteHasTable(db, "playlists") && MDZSqliteHasTable(db, "user_stats")) ? 1 : 0;
+                }
+                if (db) {
+                    sqlite3_close(db);
+                }
+            }
+        }
+        [self debugLog:[NSString stringWithFormat:@"ensureDB done schemaState=%d size=%llu",
+                        schemaState,
+                        (unsigned long long)[[fm attributesOfItemAtPath:path error:nil] fileSize]]];
+        pthread_mutex_unlock(&db_mutex);
+    });
 }
 
 +(NSString*) getFullPathForFilePath:(NSString*)filePath {

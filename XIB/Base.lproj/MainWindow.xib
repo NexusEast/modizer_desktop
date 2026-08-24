@@ -121,9 +121,6 @@
                                     <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" style="plain" separatorStyle="none" rowHeight="40" sectionHeaderHeight="22" sectionFooterHeight="22" translatesAutoresizingMaskIntoConstraints="NO" id="1965">
                                         <rect key="frame" x="0.0" y="0.0" width="375" height="541"/>
                                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                                        <constraints>
-                                            <constraint firstAttribute="width" constant="375" id="3ZR-4I-xH3"/>
-                                        </constraints>
                                         <connections>
                                             <outlet property="dataSource" destination="1954" id="1966"/>
                                             <outlet property="delegate" destination="1954" id="1967"/>
@@ -136,6 +133,7 @@
                                     <constraint firstItem="1965" firstAttribute="centerX" secondItem="1956" secondAttribute="centerX" id="8O6-zn-8ZN"/>
                                     <constraint firstItem="1965" firstAttribute="bottom" secondItem="zKT-lV-0W2" secondAttribute="bottom" id="BR0-Gx-oKP"/>
                                     <constraint firstItem="1965" firstAttribute="leading" secondItem="zKT-lV-0W2" secondAttribute="leading" id="NdH-S4-6Ri"/>
+                                    <constraint firstItem="zKT-lV-0W2" firstAttribute="trailing" secondItem="1965" secondAttribute="trailing" id="plst-tr-mac"/>
                                     <constraint firstItem="1965" firstAttribute="top" secondItem="zKT-lV-0W2" secondAttribute="top" id="jxc-Bi-lXB"/>
                                 </constraints>
                             </view>

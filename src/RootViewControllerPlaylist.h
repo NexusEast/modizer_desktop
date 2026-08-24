@@ -143,5 +143,6 @@
 -(bool) addListToPlaylistDB:(NSString*)id_playlist entries:(t_plPlaylist_entry*)pl_entries nb_entries:(int)nb_entries;
 
 -(void)updateMiniPlayer;
+- (void)mdzReloadAfterFavoriteChange;
 
 @end

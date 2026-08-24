@@ -43,15 +43,26 @@
 
 
 -(void) showAlert:(UIAlertController*)alertC {
-    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) { //if iPhone
-        [self presentViewController:alertC animated:YES completion:nil];
-    } else { //if iPad
+    BOOL presentAsPopover = NO;
+#if !TARGET_OS_MACCATALYST
+    // iPad action sheets must be popovers. Alerts must stay alerts, or text
+    // fields in the Create playlist dialog lose their contents on confirm.
+    if (alertC.preferredStyle == UIAlertControllerStyleActionSheet &&
+        UI_USER_INTERFACE_IDIOM() != UIUserInterfaceIdiomPhone) {
+        presentAsPopover = YES;
+    }
+#endif
+    if (presentAsPopover) {
         alertC.modalPresentationStyle = UIModalPresentationPopover;
         alertC.popoverPresentationController.sourceView = self.view;
-        alertC.popoverPresentationController.sourceRect = CGRectMake(self.view.frame.size.width/3, self.view.frame.size.height/2, 0, 0);
-        alertC.popoverPresentationController.permittedArrowDirections=0;
-        [self presentViewController:alertC animated:YES completion:nil];
+        alertC.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
+                                                                     CGRectGetMidY(self.view.bounds),
+                                                                     1.0, 1.0);
+        alertC.popoverPresentationController.permittedArrowDirections = 0;
+    } else {
+        alertC.modalPresentationStyle = UIModalPresentationAutomatic;
     }
+    [self presentViewController:alertC animated:YES completion:nil];
 }
 
 -(void) showAlertMsg:(NSString*)title message:(NSString*)message {

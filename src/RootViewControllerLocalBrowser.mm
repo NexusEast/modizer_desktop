@@ -160,9 +160,14 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
             //rename to old DB
             [fileManager moveItemAtPath:pathToDB toPath:pathToOldDB error:&error];
             //        [self addSkipBackupAttributeToItemAtPath:pathToOldDB];
+        } else {
+            [fileManager removeItemAtPath:pathToDB error:nil];
+            [fileManager removeItemAtPath:[pathToDB stringByAppendingString:@"-wal"] error:nil];
+            [fileManager removeItemAtPath:[pathToDB stringByAppendingString:@"-shm"] error:nil];
         }
-        [fileManager copyItemAtPath:defaultDBPath toPath:pathToDB error:&error];
-        //    [self addSkipBackupAttributeToItemAtPath:pathToDB];
+        error = nil;
+        BOOL copied = [fileManager copyItemAtPath:defaultDBPath toPath:pathToDB error:&error];
+        [ModizFileHelper debugLog:[NSString stringWithFormat:@"recreateDB copy %@ -> %@ ok=%d err=%@", defaultDBPath, pathToDB, copied, error]];
         
         if (mUpdateToNewDB) {
             bool migration_ok=true;
@@ -348,14 +353,17 @@ int do_extract(unzFile uf,char *pathToExtract,NSString *pathBase);
     mUpdateToNewDB=0;
     NSFileManager *fileManager = [[NSFileManager alloc] init];
     NSError *error;
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *documentsDirectory = [paths objectAtIndex:0];
-    NSString *writableDBPath = [documentsDirectory stringByAppendingPathComponent:DATABASENAME_USER];
+    [ModizFileHelper ensureUserDatabaseReady];
+    NSString *writableDBPath = [ModizFileHelper getUserDatabasePath];
+    [ModizFileHelper debugLog:[NSString stringWithFormat:@"createEditableCopy force=%d quiet=%d path=%@ searchDocs=%@",
+                               (int)forceInit, quiet, writableDBPath,
+                               NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject]];
     
     success = [fileManager fileExistsAtPath:writableDBPath];
     if (success && (!forceInit)) {
         maj=min=0;
         [self getDBVersion:&maj minor:&min];
+        [ModizFileHelper debugLog:[NSString stringWithFormat:@"createEditableCopy version=%d.%d expected=%d.%d", maj, min, VERSION_MAJOR, VERSION_MINOR]];
         if ((maj==VERSION_MAJOR)&&(min==VERSION_MINOR)) {
             db_checked=1;
             fileManager=nil;
@@ -942,8 +950,10 @@ static int qsort_CompareArcEntries(const void *entryA, const void *entryB) {
             search_local_entries[j].fullpath=nil;
         }
         search_local_entries=NULL;
+        search_local_entries_count=0;
         search_local_nb_entries=0;
         free(search_local_entries_data);
+        search_local_entries_data=NULL;
     }
     
     if (mSearch) {
@@ -1004,6 +1014,7 @@ static int qsort_CompareArcEntries(const void *entryA, const void *entryB) {
             local_entries[j].fullpath=nil;
         }
         local_entries=NULL;
+        local_entries_count=0;
         free(local_entries_data);local_entries_data=NULL;
         local_nb_entries=0;
     }
@@ -2488,9 +2499,16 @@ static int shouldRestart=1;
     }
     t_local_browse_entry *entries = search_local ? search_local_entries : local_entries;
     int count = search_local ? search_local_entries_count : local_entries_count;
+    if (!entries || count <= 0) {
+        return;
+    }
     int found = -1;
     for (int i = 0; i < count; i++) {
-        if ([self mdzPath:entries[i].fullpath matchesPlaying:playingStd playingFull:playingFull]) {
+        NSString *path = entries[i].fullpath;
+        if (path.length == 0) {
+            continue;
+        }
+        if ([self mdzPath:path matchesPlaying:playingStd playingFull:playingFull]) {
             found = i;
             break;
         }

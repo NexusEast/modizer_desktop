@@ -188,6 +188,7 @@ static void MDZSyncMacStatusItem(DetailViewControllerIphone *player);
 - (void)mdzHighlightMacSubsongRow:(int)row scrollIfNeeded:(BOOL)scrollIfNeeded;
 - (NSString *)mdzMacNowPlayingMeta;
 - (myTabBarController *)mdzTabBarController;
+- (void)mdzReloadPlaylistFavorites;
 @end
 
 static void MDZStyleMacLoopInfButton(UIButton *btn, BOOL on);
@@ -905,7 +906,7 @@ bool sysMonitorIsActive;
             mainRating5off.hidden=FALSE;
         }
         // Update CarPlay buttons and playlists after rating change
-        myTabBarController *tabBarController = (myTabBarController *)self.tabBarController;
+        myTabBarController *tabBarController = [self mdzTabBarController];
         if (tabBarController && tabBarController.cpMngt) {
             [tabBarController.cpMngt refreshMPItems];
         }
@@ -991,7 +992,7 @@ bool sysMonitorIsActive;
     
     msgAlert = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"Favorites",@"")
                                                    message:[NSString stringWithFormat:NSLocalizedString(@"Please choose",@"")]
-                                            preferredStyle:UIAlertControllerStyleActionSheet];
+                                            preferredStyle:(MDZIsMacDesktop() ? UIAlertControllerStyleAlert : UIAlertControllerStyleActionSheet)];
     //Cancel action
     cancelAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"Cancel",@"") style:UIAlertActionStyleCancel
                                           handler:^(UIAlertAction * action) {
@@ -1022,6 +1023,7 @@ bool sysMonitorIsActive;
             //update UI
             [self showRating:tmp_rating];
             
+            [self mdzReloadPlaylistFavorites];
             if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
         }];
         
@@ -1040,6 +1042,7 @@ bool sysMonitorIsActive;
             //update UI
             [self showRating:5];
             
+            [self mdzReloadPlaylistFavorites];
             if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
         }];
         
@@ -1071,7 +1074,8 @@ bool sysMonitorIsActive;
                     [self showRating:tmp_rating];
                     
                     
-                    if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
+                    [self mdzReloadPlaylistFavorites];
+            if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
                 }];
                 [msgAlert addAction:userAction];
             }
@@ -1093,7 +1097,8 @@ bool sysMonitorIsActive;
                     [self showRating:5];
                     
                     
-                    if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
+                    [self mdzReloadPlaylistFavorites];
+            if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
                 }];
                 [msgAlert addAction:userAction];
             }
@@ -1135,7 +1140,8 @@ bool sysMonitorIsActive;
                 //update UI
                 [self showRating:tmp_rating];
                 
-                if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
+                [self mdzReloadPlaylistFavorites];
+            if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
             }];
             
             [msgAlert addAction:userAction];
@@ -1159,7 +1165,8 @@ bool sysMonitorIsActive;
                 //update UI
                 [self showRating:5];
                 
-                if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
+                [self mdzReloadPlaylistFavorites];
+            if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];
             }];
             [msgAlert addAction:userAction];
         }
@@ -1200,6 +1207,8 @@ bool sysMonitorIsActive;
         if ([mplayer isMultiSongs]) filePath=[NSString stringWithFormat:@"%@?%d",filePath,mplayer.mod_currentsub];
         
         DBHelper::getFileStatsDBmod(filePath,NULL,&tmp_rating,NULL);
+        [ModizFileHelper debugLog:[NSString stringWithFormat:@"pushedRatingCommon force=%d tmp_rating=%d archive=%d multisong=%d filePath=%@",
+                                   (int)rating, (int)tmp_rating, [mplayer isArchive] ? 1 : 0, mplayer.mod_subsongs > 1 ? 1 : 0, filePath]];
         
         if (tmp_rating) {
             //remove
@@ -1219,10 +1228,29 @@ bool sysMonitorIsActive;
     }
     
     DBHelper::getFileStatsDBmod(filePath,&playcount,&tmp_rating,NULL);
+    [ModizFileHelper debugLog:[NSString stringWithFormat:@"pushedRatingCommon after stats playcount=%d rating=%d", (int)playcount, (int)tmp_rating]];
     
     if (settings[GLOB_StatsUpload].detail.mdz_boolswitch.switch_value) {
         mSendStatTimer=0;
         if (![radioSource isActive]) [GoogleAppHelper SendStatistics:fileName path:filePath rating:tmp_rating playcount:playcount];
+    }
+    [self mdzReloadPlaylistFavorites];
+    [[NSNotificationCenter defaultCenter] postNotificationName:MDZFileStatsChangedNotification
+                                                        object:self
+                                                      userInfo:nil];
+}
+
+- (void)mdzReloadPlaylistFavorites {
+    myTabBarController *tabBarController = [self mdzTabBarController];
+    if (!tabBarController.playlistVC) {
+        [ModizFileHelper debugLog:@"mdzReloadPlaylistFavorites skipped: no playlistVC"];
+        return;
+    }
+    RootViewControllerPlaylist *playlistRoot = tabBarController.playlistVC;
+    [playlistRoot mdzReloadAfterFavoriteChange];
+    UIViewController *top = playlistRoot.navigationController.topViewController;
+    if (top && top != playlistRoot && [top isKindOfClass:[RootViewControllerPlaylist class]]) {
+        [(RootViewControllerPlaylist *)top mdzReloadAfterFavoriteChange];
     }
 }
 
@@ -5907,6 +5935,12 @@ static void MDZPlaceMacAccessorySlot(NSArray *buttons, CGRect frame) {
     [lay.rewindButton addTarget:self action:@selector(playPrevSub) forControlEvents:UIControlEventTouchUpInside];
     [lay.forwardButton addTarget:self action:@selector(playNextSub) forControlEvents:UIControlEventTouchUpInside];
     [lay.nextButton addTarget:self action:@selector(playNext) forControlEvents:UIControlEventTouchUpInside];
+    [mainRating5 removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
+    [mainRating5off removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
+    [mainRating5 addTarget:self action:@selector(pushedRating5) forControlEvents:UIControlEventTouchUpInside];
+    [mainRating5off addTarget:self action:@selector(pushedRating5) forControlEvents:UIControlEventTouchUpInside];
+    mainRating5.userInteractionEnabled = YES;
+    mainRating5off.userInteractionEnabled = YES;
     if (mPaused) {
         [lay.playButton addTarget:self action:@selector(playPushed) forControlEvents:UIControlEventTouchUpInside];
     } else {

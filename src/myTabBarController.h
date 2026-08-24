@@ -85,6 +85,7 @@
 @property (nonatomic, retain) MacSidebarLayout *macSidebarLayout;
 @property (nonatomic, retain) UIButton *macSidebarBackButton;
 @property (nonatomic, weak) UINavigationController *macObservedNav;
+@property (nonatomic, weak) UIViewController *macSidebarBackInsetHost;
 #endif
 
 -(void) openURL:(NSURL *)url;

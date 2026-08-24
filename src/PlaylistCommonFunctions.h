@@ -9,10 +9,12 @@
 #define PlaylistCommonFunctions_h
 
 #include "AlertsCommonFunctions.h"
+#import "ModizFileHelper.h"
 
 -(int) loadPlayListsListFromDB:(t_playlist_DB**)plList {
-    NSString *pathToDB=[NSString stringWithFormat:@"%@/%@",[[ModizFileHelper getAppHomeDirectory] stringByAppendingPathComponent:  @"Documents"],DATABASENAME_USER];
-    sqlite3 *db;
+    [ModizFileHelper ensureUserDatabaseReady];
+    NSString *pathToDB=[ModizFileHelper getUserDatabasePath];
+    sqlite3 *db = NULL;
     int pl_number=0;
     
     *plList=NULL;
@@ -46,7 +48,8 @@
                 
                 while (sqlite3_step(stmt) == SQLITE_ROW) {
                     (*plList)[pl_index].pl_id=sqlite3_column_int(stmt, 0);
-                    (*plList)[pl_index].pl_name=strdup((char*)sqlite3_column_text(stmt, 1));
+                    const char *nm = (const char *)sqlite3_column_text(stmt, 1);
+                    (*plList)[pl_index].pl_name = strdup(nm ? nm : "");
                     (*plList)[pl_index].pl_size=sqlite3_column_int(stmt, 2);
                     pl_index++;
                 }
@@ -61,17 +64,19 @@
 }
 
 -(int) getFavoritesCountFromDB {
-    NSString *pathToDB=[NSString stringWithFormat:@"%@/%@",[[ModizFileHelper getAppHomeDirectory] stringByAppendingPathComponent:  @"Documents"],DATABASENAME_USER];
-    sqlite3 *db;
+    [ModizFileHelper ensureUserDatabaseReady];
+    NSString *pathToDB=[ModizFileHelper getUserDatabasePath];
+    sqlite3 *db = NULL;
     int pl_number=0;
     
     pthread_mutex_lock(&db_mutex);
-    if (sqlite3_open([pathToDB UTF8String], &db) == SQLITE_OK){
+    int openRc = sqlite3_open([pathToDB UTF8String], &db);
+    if (openRc == SQLITE_OK){
         char sqlStatement[1024];
         sqlite3_stmt *stmt;
         int err;
         
-        err=sqlite3_exec(db, "PRAGMA journal_mode=WAL; PRAGMA cache_size = 1;PRAGMA synchronous = 1;PRAGMA locking_mode = EXCLUSIVE;", 0, 0, 0);
+        err=sqlite3_exec(db, "PRAGMA journal_mode=WAL; PRAGMA cache_size = 1;PRAGMA synchronous = 1;PRAGMA locking_mode = NORMAL;", 0, 0, 0);
         if (err==SQLITE_OK){
         } else MDZELog("ErrSQL : %d",err);
         
@@ -82,17 +87,24 @@
                 pl_number=sqlite3_column_int(stmt, 0);
             }
             sqlite3_finalize(stmt);
-        } else MDZELog("ErrSQL : %d",err);
-    };
-    sqlite3_close(db);
+        } else {
+            MDZELog("ErrSQL : %d",err);
+            [ModizFileHelper debugLog:[NSString stringWithFormat:@"getFavoritesCount prepare rc=%d errmsg=%s path=%@", err, sqlite3_errmsg(db), pathToDB]];
+        }
+    } else {
+        [ModizFileHelper debugLog:[NSString stringWithFormat:@"getFavoritesCount open rc=%d errmsg=%s path=%@", openRc, db ? sqlite3_errmsg(db) : "nodb", pathToDB]];
+    }
+    if (db) sqlite3_close(db);
     pthread_mutex_unlock(&db_mutex);
     
+    [ModizFileHelper debugLog:[NSString stringWithFormat:@"getFavoritesCount=%d", pl_number]];
     return pl_number;
 }
 
 -(int) getMostPlayedCountFromDB {
-    NSString *pathToDB=[NSString stringWithFormat:@"%@/%@",[[ModizFileHelper getAppHomeDirectory] stringByAppendingPathComponent:  @"Documents"],DATABASENAME_USER];
-    sqlite3 *db;
+    [ModizFileHelper ensureUserDatabaseReady];
+    NSString *pathToDB=[ModizFileHelper getUserDatabasePath];
+    sqlite3 *db = NULL;
     int pl_number=0;
     
     pthread_mutex_lock(&db_mutex);
@@ -387,28 +399,50 @@
 }
 */
 -(NSString *) minitNewPlaylistDB:(NSString *)listName {
-    NSString *pathToDB=[NSString stringWithFormat:@"%@/%@",[[ModizFileHelper getAppHomeDirectory] stringByAppendingPathComponent:  @"Documents"],DATABASENAME_USER];
-    sqlite3 *db;
-    NSString *id_playlist;
+    [ModizFileHelper ensureUserDatabaseReady];
+    NSString *pathToDB=[ModizFileHelper getUserDatabasePath];
+    sqlite3 *db = NULL;
+    NSString *id_playlist = nil;
+    [ModizFileHelper debugLog:[NSString stringWithFormat:@"minitNewPlaylist name=%@ path=%@", listName, pathToDB]];
     pthread_mutex_lock(&db_mutex);
-    if (sqlite3_open([pathToDB UTF8String], &db) == SQLITE_OK){
-        char sqlStatement[1024];
+    int openRc = sqlite3_open([pathToDB UTF8String], &db);
+    if (openRc == SQLITE_OK){
         int err;
         
-        err=sqlite3_exec(db, "PRAGMA journal_mode=WAL; PRAGMA cache_size = 1;PRAGMA synchronous = 1;PRAGMA locking_mode = EXCLUSIVE;", 0, 0, 0);
+        err=sqlite3_exec(db, "PRAGMA journal_mode=WAL; PRAGMA cache_size = 1;PRAGMA synchronous = 1;PRAGMA locking_mode = NORMAL;", 0, 0, 0);
         if (err==SQLITE_OK){
-        } else MDZELog("ErrSQL : %d",err);
-        
-        snprintf(sqlStatement,sizeof(sqlStatement),"INSERT INTO playlists (name,num_files) SELECT \"%s\",0",[listName UTF8String]);
-        err=sqlite3_exec(db, sqlStatement, NULL, NULL, NULL);
-        if (err==SQLITE_OK){
-        } else MDZELog("ErrSQL : %d",err);
-        
-        //Get id
-        id_playlist=[[NSString alloc] initWithFormat:@"%lld",sqlite3_last_insert_rowid(db) ];
-    };
-    sqlite3_close(db);
+        } else {
+            MDZELog("ErrSQL : %d",err);
+            [ModizFileHelper debugLog:[NSString stringWithFormat:@"minitNewPlaylist pragma rc=%d errmsg=%s", err, sqlite3_errmsg(db)]];
+        }
+        sqlite3_busy_timeout(db, 5000);
+
+        sqlite3_stmt *stmt = NULL;
+        err = sqlite3_prepare_v2(db, "INSERT INTO playlists (name,num_files) VALUES (?,0)", -1, &stmt, NULL);
+        if (err == SQLITE_OK) {
+            sqlite3_bind_text(stmt, 1, [listName UTF8String] ?: "", -1, SQLITE_TRANSIENT);
+            err = sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+            if (err == SQLITE_DONE) {
+                sqlite3_int64 rowid = sqlite3_last_insert_rowid(db);
+                [ModizFileHelper debugLog:[NSString stringWithFormat:@"minitNewPlaylist insert ok rowid=%lld", (long long)rowid]];
+                if (rowid > 0) {
+                    id_playlist=[[NSString alloc] initWithFormat:@"%lld", rowid];
+                }
+            } else {
+                MDZELog("ErrSQL : %d",err);
+                [ModizFileHelper debugLog:[NSString stringWithFormat:@"minitNewPlaylist insert rc=%d errmsg=%s", err, sqlite3_errmsg(db)]];
+            }
+        } else {
+            MDZELog("ErrSQL : %d",err);
+            [ModizFileHelper debugLog:[NSString stringWithFormat:@"minitNewPlaylist prepare rc=%d errmsg=%s", err, sqlite3_errmsg(db)]];
+        }
+    } else {
+        [ModizFileHelper debugLog:[NSString stringWithFormat:@"minitNewPlaylist open rc=%d errmsg=%s", openRc, db ? sqlite3_errmsg(db) : "nodb"]];
+    }
+    if (db) sqlite3_close(db);
     pthread_mutex_unlock(&db_mutex);
+    [ModizFileHelper debugLog:[NSString stringWithFormat:@"minitNewPlaylist result id=%@", id_playlist]];
     return id_playlist;
 }
 
@@ -428,8 +462,10 @@
     
     UIAlertAction *saveAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"Create",@"") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
         UITextField *plName = weakAlert.textFields.firstObject;
-            
-        NSString *playlistName=[[NSString alloc] initWithString:plName.text];
+        NSString *playlistName = [plName.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (playlistName.length == 0) {
+            return;
+        }
         NSString *playlistId=[self minitNewPlaylistDB:playlistName];
         
         [self addMultipleToPlaylistDB:playlistId labels:arrLabels fullPaths:arrFullPaths];
@@ -457,8 +493,10 @@
     
     UIAlertAction *saveAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"Create",@"") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
         UITextField *plName = weakAlert.textFields.firstObject;
-            
-        NSString *playlistName=[[NSString alloc] initWithString:plName.text];
+        NSString *playlistName = [plName.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (playlistName.length == 0) {
+            return;
+        }
         NSString *playlistId=[self minitNewPlaylistDB:playlistName];
         
         [self addToPlaylistDB:playlistId  label:label fullPath:fullPath];
@@ -469,6 +507,17 @@
     [self showAlert:alertC];
 }
 
+
+static NSString *MDZPlaylistActionTitle(const t_playlist_DB *pl) {
+    NSString *name = nil;
+    if (pl && pl->pl_name) {
+        name = [NSString stringWithUTF8String:pl->pl_name];
+    }
+    if (name.length == 0) {
+        return [NSString stringWithFormat:@"Playlist %d", pl ? pl->pl_id : 0];
+    }
+    return name;
+}
 
 - (void) addToPlaylistSelView:(NSString*)fullPath label:(NSString*)label showNowListening:(bool)showNL{
     __block t_playlist_DB *plList;
@@ -522,7 +571,7 @@
     }
     
     for (int i=0;i<plListsize;i++) {
-        UIAlertAction* userplaylistAction = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"%s",plList[i].pl_name] style:UIAlertActionStyleDefault
+        UIAlertAction* userplaylistAction = [UIAlertAction actionWithTitle:MDZPlaylistActionTitle(&plList[i]) style:UIAlertActionStyleDefault
            handler:^(UIAlertAction * action) {
             
                 [self addToPlaylistDB:[NSString stringWithFormat:@"%d",plList[i].pl_id]  label:label fullPath:fullPath];
@@ -587,7 +636,7 @@
     }
     
     for (int i=0;i<plListsize;i++) {
-        UIAlertAction* userplaylistAction = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"%s",plList[i].pl_name] style:UIAlertActionStyleDefault
+        UIAlertAction* userplaylistAction = [UIAlertAction actionWithTitle:MDZPlaylistActionTitle(&plList[i]) style:UIAlertActionStyleDefault
            handler:^(UIAlertAction * action) {
                 [self addMultipleToPlaylistDB:[NSString stringWithFormat:@"%d",plList[i].pl_id]  labels:arrayLabel fullPaths:arrayPath];
                 if ([self respondsToSelector:@selector(updateMiniPlayer)]) [self performSelector:@selector(updateMiniPlayer)];

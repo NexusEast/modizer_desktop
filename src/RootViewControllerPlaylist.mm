@@ -249,61 +249,97 @@ int qsort_ComparePlaylistEntriesRevFP(const void *entryA, const void *entryB) {
 }
 
 
+- (NSString *)mdzSuggestedPlaylistName {
+    NSInteger n = 1;
+    if ([list isKindOfClass:[NSArray class]]) {
+        n = (NSInteger)list.count + 1;
+    }
+    return [NSString stringWithFormat:@"%@ %ld", NSLocalizedString(@"Playlist", @""), (long)MAX((NSInteger)1, n)];
+}
+
 - (void)createNewPlaylist {
+    NSString *suggested = [self mdzSuggestedPlaylistName];
+    __block NSString *typedName = [suggested copy];
     UIAlertController *alertC = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"Enter playlist name",@"")
                                                                     message:nil
                                                              preferredStyle:UIAlertControllerStyleAlert];
     __weak UIAlertController *weakAlert = alertC;
     [alertC addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        textField.placeholder = @"";
+        textField.text = suggested;
+        textField.placeholder = suggested;
+        textField.autocorrectionType = UITextAutocorrectionTypeNo;
+        textField.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+    id nameObs = [[NSNotificationCenter defaultCenter] addObserverForName:UITextFieldTextDidChangeNotification
+                                                                   object:nil
+                                                                    queue:[NSOperationQueue mainQueue]
+                                                               usingBlock:^(NSNotification *note) {
+        UITextField *tf = note.object;
+        if (![tf isKindOfClass:[UITextField class]]) {
+            return;
+        }
+        if ([weakAlert.textFields containsObject:tf]) {
+            typedName = tf.text ?: @"";
+        }
     }];
     
     UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"Cancel",@"") style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+        [[NSNotificationCenter defaultCenter] removeObserver:nameObs];
         [self freePlaylist];
-        
     }];
     [alertC addAction:cancelAction];
     
     UIAlertAction *saveAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"Create",@"") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-        UITextField *plName = weakAlert.textFields.firstObject;
-        if (![plName.text isEqualToString:@""]) {
-            if (childController == nil) childController = [[RootViewControllerPlaylist alloc]  initWithNibName:@"PlaylistViewController" bundle:[NSBundle mainBundle]];
-            
-            ((RootViewControllerPlaylist*)childController)->show_playlist=1;
-            
-            playlist->playlist_id=nil;
-            playlist->playlist_name=nil;
-            playlist->playlist_name=[[NSString alloc] initWithString:plName.text];
-            playlist->playlist_id=[self minitNewPlaylistDB:playlist->playlist_name];
-            self.navigationItem.title=playlist->playlist_name;
-            
-            //set new title
-            childController.title = playlist->playlist_name;
-            
-            ((RootViewControllerPlaylist*)childController)->browse_depth = browse_depth+1;
-            ((RootViewControllerPlaylist*)childController)->detailViewController=detailViewController;
-            ((RootViewControllerPlaylist*)childController)->playlist=playlist;
-            ((RootViewControllerPlaylist*)childController)->mFreePlaylist=0;
-//            childController.view.frame=self.view.frame;
-            // Ensure proper layout under navigation/tab bars
-            if ([childController respondsToSelector:@selector(setEdgesForExtendedLayout:)]) {
-                childController.edgesForExtendedLayout = UIRectEdgeNone;
-                childController.extendedLayoutIncludesOpaqueBars = NO;
-            }
-            if ([childController isKindOfClass:[UITableViewController class]]) {
-                ((UITableViewController *)childController).tableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentAutomatic;
-            } else if ([childController.view isKindOfClass:[UIScrollView class]]) {
-                ((UIScrollView *)childController.view).contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentAutomatic;
-            }
-            keys=nil;
-            list=nil;
-            
-            // And push the window
-            [self.navigationController pushViewController:childController animated:YES];
+        [[NSNotificationCenter defaultCenter] removeObserver:nameObs];
+        NSString *raw = typedName;
+        if (raw.length == 0) {
+            raw = weakAlert.textFields.firstObject.text;
         }
-        else{
-            [self presentViewController:weakAlert animated:YES completion:nil];
+        NSString *name = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (name.length == 0) {
+            name = suggested;
         }
+        if (!playlist) {
+            playlist = (t_playlist *)calloc(1, sizeof(t_playlist));
+            mFreePlaylist = 1;
+        }
+        playlist->playlist_id=nil;
+        playlist->playlist_name=nil;
+        playlist->playlist_name=[[NSString alloc] initWithString:name];
+        playlist->playlist_id=[self minitNewPlaylistDB:playlist->playlist_name];
+        [ModizFileHelper debugLog:[NSString stringWithFormat:@"createNewPlaylist name=%@ id=%@", playlist->playlist_name, playlist->playlist_id]];
+        if (playlist->playlist_id.length == 0 || [playlist->playlist_id isEqualToString:@"0"]) {
+            [self freePlaylist];
+            [self showAlertMsg:NSLocalizedString(@"Error", @"")
+                       message:NSLocalizedString(@"Could not create the playlist.", @"")];
+            return;
+        }
+        childController = [[RootViewControllerPlaylist alloc] initWithNibName:@"PlaylistViewController" bundle:[NSBundle mainBundle]];
+        
+        ((RootViewControllerPlaylist*)childController)->show_playlist=1;
+        self.navigationItem.title=playlist->playlist_name;
+        
+        //set new title
+        childController.title = playlist->playlist_name;
+        
+        ((RootViewControllerPlaylist*)childController)->browse_depth = browse_depth+1;
+        ((RootViewControllerPlaylist*)childController)->detailViewController=detailViewController;
+        ((RootViewControllerPlaylist*)childController)->playlist=playlist;
+        ((RootViewControllerPlaylist*)childController)->mFreePlaylist=0;
+        if ([childController respondsToSelector:@selector(setEdgesForExtendedLayout:)]) {
+            childController.edgesForExtendedLayout = UIRectEdgeNone;
+            childController.extendedLayoutIncludesOpaqueBars = NO;
+        }
+        if ([childController isKindOfClass:[UITableViewController class]]) {
+            ((UITableViewController *)childController).tableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentAutomatic;
+        } else if ([childController.view isKindOfClass:[UIScrollView class]]) {
+            ((UIScrollView *)childController.view).contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentAutomatic;
+        }
+        [self fillKeys];
+        [self.tableView reloadData];
+        
+        // And push the window
+        [self.navigationController pushViewController:childController animated:YES];
     }];
     [alertC addAction:saveAction];
     
@@ -325,18 +361,16 @@ int qsort_ComparePlaylistEntriesRevFP(const void *entryA, const void *entryB) {
     
     UIAlertAction *saveAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"Save",@"") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
         UITextField *plName = weakAlert.textFields.firstObject;
-        if (![plName.text isEqualToString:@""]) {
+        NSString *name = [plName.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (name.length > 0) {
             playlist->playlist_id=nil;
             playlist->playlist_name=nil;
-            playlist->playlist_name=[[NSString alloc] initWithString:plName.text];
+            playlist->playlist_name=[[NSString alloc] initWithString:name];
             playlist->playlist_id=[self minitNewPlaylistDB:playlist->playlist_name];
             integrated_playlist=0;
             [self addListToPlaylistDB];
             self.navigationItem.title=playlist->playlist_name;
             [self.tableView reloadData];
-        }
-        else{
-            [self presentViewController:weakAlert animated:YES completion:nil];
         }
     }];
     [alertC addAction:saveAction];
@@ -775,10 +809,14 @@ int qsort_ComparePlaylistEntriesRevFP(const void *entryA, const void *entryB) {
 #endif
     }
     if (show_playlist) {
-        sBar.frame=CGRectMake(0,0,0,0);
         sBar.hidden=TRUE;
-        //[self.view setNeedsUpdateConstraints];
-        //[self.view setNeedsLayout];
+        sBar.userInteractionEnabled=NO;
+#if TARGET_OS_MACCATALYST
+        // Keep the 44pt row. The table is pinned to the search bar's bottom,
+        // and the Mac back button lives in that row.
+#else
+        sBar.frame=CGRectMake(0,0,0,0);
+#endif
     }
     
     /////////////////////////////////////
@@ -897,6 +935,23 @@ END_PROFILE
     }
 }
 
+
+- (void)mdzReloadAfterFavoriteChange {
+    [ModizFileHelper debugLog:[NSString stringWithFormat:@"reloadAfterFavoriteChange depth=%d show_playlist=%d integrated=%d loaded=%d",
+                               browse_depth, show_playlist, integrated_playlist, self.isViewLoaded]];
+    if (!self.isViewLoaded) {
+        return;
+    }
+    if (browse_depth == 0) {
+        [self fillKeys];
+        [self.tableView reloadData];
+        return;
+    }
+    if (show_playlist && integrated_playlist == INTEGRATED_PLAYLIST_FAVORITES && playlist) {
+        [self loadFavoritesList:playlist];
+        [self.tableView reloadData];
+    }
+}
 
 -(void) fillKeys {
     if ((mSearchText==nil)||([mSearchText length]==0)) mSearch=0;
@@ -1537,8 +1592,10 @@ static int qsort_CompareArcEntries(const void *entryA, const void *entryB) {
             search_local_entries[j].fullpath=nil;
         }
         search_local_entries=NULL;
+        search_local_entries_count=0;
         search_local_nb_entries=0;
         free(search_local_entries_data);
+        search_local_entries_data=NULL;
     }
     
     if (mSearch) {
@@ -2409,8 +2466,9 @@ static int qsort_CompareArcEntries(const void *entryA, const void *entryB) {
 }
 
 -(void) loadFavoritesList:(t_playlist*)playlist {
-    NSString *pathToDB=[NSString stringWithFormat:@"%@/%@",[[ModizFileHelper getAppHomeDirectory] stringByAppendingPathComponent:  @"Documents"],DATABASENAME_USER];
-    sqlite3 *db;
+    [ModizFileHelper ensureUserDatabaseReady];
+    NSString *pathToDB=[ModizFileHelper getUserDatabasePath];
+    sqlite3 *db = NULL;
     
     playlist->nb_entries=0;
     pthread_mutex_lock(&db_mutex);
@@ -2453,10 +2511,16 @@ static int qsort_CompareArcEntries(const void *entryA, const void *entryB) {
                 }
             }
             sqlite3_finalize(stmt);
-        } else MDZELog("ErrSQL : %d",err);
+        } else {
+            MDZELog("ErrSQL : %d",err);
+            [ModizFileHelper debugLog:[NSString stringWithFormat:@"loadFavoritesList prepare rc=%d errmsg=%s", err, sqlite3_errmsg(db)]];
+        }
+    } else {
+        [ModizFileHelper debugLog:[NSString stringWithFormat:@"loadFavoritesList open failed path=%@", pathToDB]];
     }
-    sqlite3_close(db);
+    if (db) sqlite3_close(db);
     pthread_mutex_unlock(&db_mutex);
+    [ModizFileHelper debugLog:[NSString stringWithFormat:@"loadFavoritesList count=%d", playlist->nb_entries]];
 }
 
 -(void) loadMostPlayedList:(t_playlist*)playlist{
@@ -4125,7 +4189,9 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
         
         
         if (indexPath.row==0) { //new playlist
+            [tabView deselectRowAtIndexPath:indexPath animated:YES];
             [self createNewPlaylist];
+            return;
         }
         if ((indexPath.row==1)&&(detailViewController.mPlaylist_size)) { //display current queue
             playlist->nb_entries=detailViewController.mPlaylist_size;

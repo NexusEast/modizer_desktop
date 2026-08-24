@@ -37,6 +37,9 @@
 +(NSString*) getFilePathNoSubSong:(NSString*)filePath;
 +(NSString*) getFilePathFromDocuments:(NSString*)filePath;
 +(NSString*) getAppHomeDirectory;
++(NSString*) getUserDatabasePath;
++(void) debugLog:(NSString*)message;
++(void) ensureUserDatabaseReady;
 
 +(NSString*) getCorrectFileName:(const char*)archiveFilename archive:(struct archive *)a entry:(struct archive_entry *)entry;
 

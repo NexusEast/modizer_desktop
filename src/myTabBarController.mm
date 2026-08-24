@@ -39,6 +39,7 @@
 - (void)mdzApplyMacSidebarNavChrome;
 - (void)mdzPinMacSidebarSearchBars;
 - (void)mdzEnsureMacSidebarBackButton;
+- (void)mdzApplyMacSidebarBackRowInsetOn:(UIViewController *)hostVC;
 - (void)mdzMacSidebarBackTapped;
 - (void)mdzObserveSelectedNavIfNeeded;
 - (void)mdzHideSystemTabOverlays;
@@ -949,6 +950,7 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
                         change:(NSDictionary<NSKeyValueChangeKey,id> *)change
                        context:(void *)context {
     if ([keyPath isEqualToString:@"viewControllers"]) {
+        [self mdzPinMacSidebarSearchBars];
         dispatch_async(dispatch_get_main_queue(), ^{
             [self mdzPinMacSidebarSearchBars];
             [self mdzSaveMacBrowseState];
@@ -985,6 +987,22 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     self.macSidebarBackButton = btn;
 }
 
+- (void)mdzApplyMacSidebarBackRowInsetOn:(UIViewController *)hostVC {
+    CGFloat rowH = MDZ_MAC_BUTTON_STEP;
+    UIViewController *prev = self.macSidebarBackInsetHost;
+    if (prev && prev != hostVC && fabs(prev.additionalSafeAreaInsets.top - rowH) < 1.0) {
+        prev.additionalSafeAreaInsets = UIEdgeInsetsZero;
+    }
+    if (hostVC) {
+        if (fabs(hostVC.additionalSafeAreaInsets.top - rowH) > 0.5) {
+            hostVC.additionalSafeAreaInsets = UIEdgeInsetsMake(rowH, 0, 0, 0);
+        }
+        self.macSidebarBackInsetHost = hostVC;
+    } else {
+        self.macSidebarBackInsetHost = nil;
+    }
+}
+
 - (void)mdzPinMacSidebarSearchBars {
     [self mdzObserveSelectedNavIfNeeded];
     UIViewController *selected = self.selectedViewController;
@@ -996,20 +1014,21 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
     BOOL canPop = (nav && nav.viewControllers.count > 1);
     [self mdzEnsureMacSidebarBackButton];
     UIButton *back = self.macSidebarBackButton;
-    UIView *host = selected.view;
+    UIView *host = selected.viewIfLoaded ?: selected.view;
     if (!host) {
         back.hidden = YES;
+        [self mdzApplyMacSidebarBackRowInsetOn:nil];
         return;
     }
-    if (back.superview != host) {
-        [host addSubview:back];
-    }
     back.hidden = !canPop;
-    CGFloat top = host.safeAreaInsets.top;
+    CGFloat rowTop = host.safeAreaInsets.top - selected.additionalSafeAreaInsets.top;
+    if (rowTop < 0.0) {
+        rowTop = 0.0;
+    }
     CGFloat width = CGRectGetWidth(host.bounds);
-    CGFloat searchH = 44.0;
+    CGFloat searchH = MDZ_MAC_BUTTON_STEP;
     CGFloat leading = canPop ? 52.0 : 0.0;
-    UISearchBar *barToAlign = nil;
+    UISearchBar *visibleBar = nil;
     for (UIView *sub in host.subviews) {
         if (![sub isKindOfClass:[UISearchBar class]]) {
             continue;
@@ -1018,31 +1037,56 @@ extern NSMutableArray *mac_key_pressed,*mac_key_released;
         if (bar.superview != host) {
             continue;
         }
-        if (bar.hidden || CGRectGetHeight(bar.frame) < 1.0) {
-            continue;
-        }
-        bar.frame = CGRectMake(leading, top, MAX(44.0, width - leading), searchH);
-        if (!barToAlign) {
-            barToAlign = bar;
+        if (!bar.hidden && bar.alpha > 0.01 && CGRectGetHeight(bar.frame) >= 1.0) {
+            bar.frame = CGRectMake(leading, rowTop, MAX(44.0, width - leading), searchH);
+            if (!visibleBar) {
+                visibleBar = bar;
+            }
         }
     }
-    if (canPop && barToAlign) {
-        [barToAlign layoutIfNeeded];
-        UIView *field = barToAlign.searchTextField;
+    // Favorites / playlist contents hide the search bar, so it is not a
+    // usable row. Overlay the back button on the tab chrome instead.
+    BOOL needExtra = canPop && (visibleBar == nil);
+    [self mdzApplyMacSidebarBackRowInsetOn:(needExtra ? selected : nil)];
+    if (!canPop) {
+        return;
+    }
+    CGFloat side = MDZ_MAC_BUTTON_SIDE;
+    CGFloat by = rowTop + (searchH - side) / 2.0;
+    if (visibleBar) {
+        if (back.superview != host) {
+            [host addSubview:back];
+        }
+        [visibleBar layoutIfNeeded];
+        UIView *field = visibleBar.searchTextField;
         CGRect fieldR = [field convertRect:field.bounds toView:host];
-        CGFloat side = CGRectGetHeight(fieldR);
-        CGFloat by = fieldR.origin.y;
-        if (side < 28.0 || CGRectIsEmpty(fieldR) || !field) {
-            side = 36.0;
-            by = top + (searchH - side) / 2.0;
-        } else if (side > 40.0) {
-            by += (side - 36.0) / 2.0;
-            side = 36.0;
+        if (field && !CGRectIsEmpty(fieldR) && CGRectGetHeight(fieldR) >= 28.0) {
+            side = CGRectGetHeight(fieldR);
+            by = fieldR.origin.y;
+            if (side > 40.0) {
+                by += (side - MDZ_MAC_BUTTON_SIDE) / 2.0;
+                side = MDZ_MAC_BUTTON_SIDE;
+            }
         }
         back.frame = CGRectMake(8.0, by, side, side);
-        back.layer.cornerRadius = MIN(10.0, side / 2.0);
         [host bringSubviewToFront:back];
+    } else {
+        if (back.superview != self.view) {
+            [self.view addSubview:back];
+        }
+        CGFloat sysTop = self.view.safeAreaInsets.top - self.additionalSafeAreaInsets.top;
+        if (sysTop < 0.0) {
+            sysTop = 0.0;
+        }
+        CGFloat titleTop = MAX(sysTop, MDZ_MAC_TITLEBAR_HEIGHT);
+        by = titleTop + MDZ_MAC_SIDEBAR_BAR_HEIGHT + (searchH - side) / 2.0;
+        back.frame = CGRectMake(8.0, by, side, side);
+        [self.view bringSubviewToFront:back];
+        if (self.macSidebarLayout) {
+            [self.view bringSubviewToFront:self.macSidebarLayout];
+        }
     }
+    back.layer.cornerRadius = MIN(10.0, side / 2.0);
 }
 
 - (void)mdzLayoutMacSidebarSegment {
@@ -2454,6 +2498,14 @@ ontoPrimaryViewController:(UIViewController *)primaryViewController {
     }
     self.tabBar.hidden = YES;
     self.tabBar.frame = CGRectZero;
+}
+
+- (void)navigationController:(UINavigationController *)navigationController
+        didShowViewController:(UIViewController *)viewController
+                     animated:(BOOL)animated {
+    if (self.catalystSplitViewController) {
+        [self mdzPinMacSidebarSearchBars];
+    }
 }
 #endif
 
