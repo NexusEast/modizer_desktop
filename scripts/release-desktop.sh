@@ -7,6 +7,8 @@
 #
 # Secrets (gitignored): desktop/secrets.env
 #   Created interactively on first run. chmod 600. Never commit this file.
+#   If secrets.env is missing, notarization uses the notarytool keychain
+#   profile `modizer-notary` when it is already stored in the login keychain.
 #
 # Same VERSION as an existing GitHub release (or dist DMG) exits immediately
 # unless you pass --force or bump the version.
